@@ -1,0 +1,1 @@
+2026-04-02: Created selectors.js — DOM selector map centralizing all Twitter/X data-testid selectors and logical names (TWEET_CELL, TWEET_TEXT, TWEET_AUTHOR, actions, thread, etc.) plus the MARKER_ATTR for processed tweets. Phase 1 task 1 complete.
