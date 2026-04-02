@@ -1,1 +1,5 @@
 2026-04-02: Created selectors.js — DOM selector map centralizing all Twitter/X data-testid selectors and logical names (TWEET_CELL, TWEET_TEXT, TWEET_AUTHOR, actions, thread, etc.) plus the MARKER_ATTR for processed tweets. Phase 1 task 1 complete.
+
+2026-04-02: Created corpus.js — static data bank with 3 Phase 1 archetypes (Ratio Guy, Crypto Bro, Unhinged Reply Guy), 20+ templates each, 4 filler arrays (insult 50, coin 30, shill_phrase 20, overreaction 40), and identity generation material. Phase 1 task 2 complete.
+
+2026-04-02: Created avatars.js — canvas-based avatar generator. Deterministic hash from handle selects background color from 20-tone palette, renders first letter of display name with font weight/size variation. ~12% chance of solid-color-only avatar (no letter) to mimic flat-color uploads. Outputs data:image/png;base64 URLs. Phase 1 task 3 complete.
