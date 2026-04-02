@@ -1,0 +1,54 @@
+CHROME WEB STORE LISTING — Gom Yapper
+======================================
+
+TITLE: Gom Yapper — Resilience Training for Your Timeline
+
+SHORT DESCRIPTION (132 chars max):
+Simulated hostile replies on your tweets to build immunity against internet scorn. No AI, no API keys, no data collection.
+
+DETAILED DESCRIPTION:
+The internet is full of bots and bad-faith reply guys trying to get a rise out of you. The Gom Yapper helps you build immunity.
+
+This extension adds simulated hostile replies to your own tweets — mean, dismissive, off-topic, and completely fake. The replies come from generated personas and are produced entirely offline. No AI, no API keys, no data collection.
+
+HOW IT WORKS
+• Enter your Twitter/X handle in the extension popup
+• Toggle the extension on
+• Your tweets will appear to have attracted a wave of hostile, absurd, and completely fake replies
+• Adjust intensity from Mild (3–5 replies) to Medium (6–10) to Unhinged (11–20)
+
+8 REPLY ARCHETYPES
+• Ratio Guy — one-word dismissals ("ratio", "L", "cope")
+• Crypto Bro — derails everything into crypto promotion
+• Pseudo-Intellectual — sneering condescension disguised as insight
+• Unhinged Reply Guy — disproportionate emotional reactions
+• The Bot — spam patterns and engagement farming
+• Concern Troll — faux-sympathetic backhanded comments
+• Off-Topic Ranter — completely ignores your tweet, rants about something else
+• One-Word Oracle — single enigmatic words ("no", "wrong", "mid")
+
+THE TRAINING
+Over time, you'll notice the pattern: these replies contain no real argumentation, no substance, no signal. They are pure noise. Once you can spot it in simulation, you'll spot it in the wild.
+
+Named after the gom jabbar from Dune — a test of whether you can master your instincts under pressure.
+
+PRIVACY
+• No data collection — the only stored data is your handle and preferences
+• No network calls — all content generated offline
+• No remote code execution — everything runs locally in your browser
+• Open source
+
+CATEGORY: Productivity
+
+LANGUAGE: English
+
+WEBSITE: (none)
+
+SINGLE PURPOSE DESCRIPTION:
+Injects simulated fake hostile reply indicators beneath the user's own tweets on Twitter/X for emotional resilience training.
+
+PERMISSIONS JUSTIFICATION:
+• storage: Required to save the user's Twitter handle, active/inactive state, and intensity preference across sessions.
+
+HOST PERMISSIONS JUSTIFICATION:
+• twitter.com, x.com: Required to detect the user's tweets on their timeline and inject simulated reply content into the page.
