@@ -176,6 +176,121 @@ const GOM_CONTENT = (() => {
     span.textContent = String(current + addedCount);
   }
 
+  // ── Thread view detection ─────────────────────────────────────────
+
+  function isThreadView() {
+    // Thread view has a back button and a focused tweet with conversation
+    return !!document.querySelector(GOM_SELECTORS.BACK_BUTTON);
+  }
+
+  // ── Full reply cell builder (thread view) ───────────────────────
+
+  /**
+   * Build a full-size fake reply tweet cell for thread view injection.
+   * Structurally mirrors real reply cells with article > div nesting,
+   * matching data-testid attributes and avatar/name/text/actions layout.
+   */
+  function buildFullReplyCell(reply) {
+    // cellInnerDiv wrapper — matches Twitter's virtual list items
+    const cellDiv = document.createElement('div');
+    cellDiv.setAttribute('data-testid', 'cellInnerDiv');
+    cellDiv.style.cssText = 'padding-bottom:0;';
+
+    const article = document.createElement('article');
+    article.setAttribute('role', 'article');
+    article.setAttribute('tabindex', '0');
+    article.style.cssText =
+      'display:flex;flex-direction:column;padding:12px 16px;border-bottom:1px solid rgb(47,51,54);cursor:pointer;';
+    article.classList.add('gom-fake-reply');
+
+    const outerRow = document.createElement('div');
+    outerRow.style.cssText = 'display:flex;gap:12px;';
+
+    // Avatar
+    const avatarContainer = document.createElement('div');
+    avatarContainer.style.cssText = 'flex-shrink:0;';
+    const avatarImg = document.createElement('img');
+    avatarImg.src = reply.avatar;
+    avatarImg.alt = '';
+    avatarImg.style.cssText = 'width:40px;height:40px;border-radius:50%;';
+    avatarContainer.appendChild(avatarImg);
+
+    // Content column
+    const contentCol = document.createElement('div');
+    contentCol.style.cssText = 'display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;';
+
+    // Name row
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText =
+      'display:flex;align-items:center;gap:4px;font-size:15px;line-height:20px;flex-wrap:wrap;';
+
+    const displayNameSpan = document.createElement('span');
+    displayNameSpan.style.cssText = 'font-weight:700;color:rgb(231,233,234);';
+    displayNameSpan.textContent = reply.displayName;
+    nameRow.appendChild(displayNameSpan);
+
+    if (reply.verified) {
+      const badge = document.createElement('span');
+      badge.textContent = '\u2713';
+      badge.style.cssText = 'color:rgb(29,155,240);font-size:14px;font-weight:700;';
+      nameRow.appendChild(badge);
+    }
+
+    const handleSpan = document.createElement('span');
+    handleSpan.style.cssText = 'color:rgb(113,118,123);font-weight:400;';
+    handleSpan.textContent = reply.handle;
+
+    const dotSpan = document.createElement('span');
+    dotSpan.style.cssText = 'color:rgb(113,118,123);padding:0 4px;';
+    dotSpan.textContent = '\u00B7';
+
+    const timeSpan = document.createElement('span');
+    timeSpan.style.cssText = 'color:rgb(113,118,123);font-weight:400;';
+    timeSpan.textContent = reply.timestamp;
+
+    nameRow.appendChild(handleSpan);
+    nameRow.appendChild(dotSpan);
+    nameRow.appendChild(timeSpan);
+
+    // Tweet text
+    const textDiv = document.createElement('div');
+    textDiv.setAttribute('data-testid', 'tweetText');
+    textDiv.style.cssText =
+      'font-size:15px;line-height:20px;color:rgb(231,233,234);overflow-wrap:break-word;margin-top:4px;';
+    textDiv.textContent = reply.text;
+
+    // Action row (reply, retweet, like) — mimics Twitter's action group
+    const actionRow = document.createElement('div');
+    actionRow.setAttribute('role', 'group');
+    actionRow.style.cssText =
+      'display:flex;justify-content:space-between;max-width:300px;margin-top:8px;font-size:13px;color:rgb(113,118,123);';
+
+    const actions = [
+      { icon: '\uD83D\uDCAC', count: reply.metrics.replies },
+      { icon: '\uD83D\uDD01', count: reply.metrics.retweets },
+      { icon: '\u2764\uFE0F', count: reply.metrics.likes },
+    ];
+
+    for (const action of actions) {
+      const btn = document.createElement('div');
+      btn.style.cssText =
+        'display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:9999px;';
+      btn.textContent = action.count > 0 ? action.icon + ' ' + action.count : action.icon;
+      actionRow.appendChild(btn);
+    }
+
+    contentCol.appendChild(nameRow);
+    contentCol.appendChild(textDiv);
+    contentCol.appendChild(actionRow);
+
+    outerRow.appendChild(avatarContainer);
+    outerRow.appendChild(contentCol);
+    article.appendChild(outerRow);
+    cellDiv.appendChild(article);
+
+    return cellDiv;
+  }
+
   // ── Injector ─────────────────────────────────────────────────────
 
   function injectReplies(tweetEl) {
@@ -185,15 +300,52 @@ const GOM_CONTENT = (() => {
     const count = getReplyCount();
     const replies = GOM_YAPPER.generateReplies(tweetId, count);
 
-    // Build and insert after the tweet cell
-    const replyContainer = buildReplyContainer(replies);
-
     // Find the article ancestor (the actual tweet boundary in the DOM)
     const article = tweetEl.closest('article') || tweetEl;
     const cellDiv = article.closest('[data-testid="cellInnerDiv"]') || article.parentElement;
 
-    if (cellDiv && cellDiv.parentElement) {
-      cellDiv.parentElement.insertBefore(replyContainer, cellDiv.nextSibling);
+    if (isThreadView()) {
+      // Thread view: insert full-size reply cells interleaved after the tweet
+      // Find the parent container (timeline section) for interleaving
+      const parent = cellDiv && cellDiv.parentElement;
+      if (parent) {
+        // Collect existing sibling cells to interleave with
+        const siblingCells = [];
+        let sibling = cellDiv.nextSibling;
+        while (sibling) {
+          if (sibling.nodeType === 1 && !sibling.classList.contains('gom-fake-reply-cell')) {
+            siblingCells.push(sibling);
+          }
+          sibling = sibling.nextSibling;
+        }
+
+        // Insert fake replies, interleaving with real replies where possible
+        let insertionPoint = cellDiv.nextSibling;
+        let realIdx = 0;
+        for (let i = 0; i < replies.length; i++) {
+          const replyCell = buildFullReplyCell(replies[i]);
+          replyCell.classList.add('gom-fake-reply-cell');
+
+          // Interleave: after every 1-2 real replies, insert a fake one
+          if (realIdx < siblingCells.length && i > 0 && i % 2 === 0) {
+            const afterReal = siblingCells[realIdx];
+            realIdx++;
+            if (afterReal.nextSibling) {
+              parent.insertBefore(replyCell, afterReal.nextSibling);
+            } else {
+              parent.appendChild(replyCell);
+            }
+          } else {
+            parent.insertBefore(replyCell, insertionPoint);
+          }
+        }
+      }
+    } else {
+      // Timeline/profile view: compact reply preview container
+      const replyContainer = buildReplyContainer(replies);
+      if (cellDiv && cellDiv.parentElement) {
+        cellDiv.parentElement.insertBefore(replyContainer, cellDiv.nextSibling);
+      }
     }
 
     // Inflate the reply count

@@ -7,3 +7,11 @@
 2026-04-02: Created yapper.js — generation engine. Weighted archetype selection, template slot filling from corpus fillers, identity generation (display name + handle + ~20% blue check), power-law engagement metrics, decay-curved timestamps (1m–4h). Deterministic seeding from tweet ID ensures consistent re-renders. generateReplies(tweetId, count) is the main API. Phase 1 task 4 complete.
 
 2026-04-02: Created content.js — Observer + Injector content script. MutationObserver watches for DOM mutations with added nodes, finds tweet cells authored by the configured user handle, and injects fake reply preview containers beneath them. Builds reply previews programmatically (no innerHTML) with avatar, name row, text, and metrics. Inflates reply count on processed tweets. Loads settings from chrome.storage.sync and listens for changes. Marks processed tweets with data-gom-yapped to prevent re-injection. Phase 1 task 5 complete.
+
+2026-04-02: Created popup/ (popup.html, popup.css, popup.js) — settings UI with handle input, active on/off toggle, and intensity selector (mild/medium/unhinged). Dark theme matching Twitter/X aesthetic. Saves to chrome.storage.sync using the same keys content.js reads. Status indicator shows current state. Phase 1 task 6 complete. Phase 1 is now complete.
+
+2026-04-02: Expanded corpus.js to all 8 archetypes with full template banks — added Pseudo-Intellectual (22 templates), The Bot (21), Concern Troll (21), Off-Topic Ranter (21), One-Word Oracle (26). Added 6 new filler arrays: concept (40), emoji_spam (20), backhanded_concern (30), unrelated_rant (40), spam_product (15), hashtag (20). Total: 305 filler entries across 10 categories. Archetype weights sum to 100%. Phase 2 task 1 complete.
+
+2026-04-02: Phase 2 tasks 2–5 (identity generation, metrics, intensity slider) were already implemented in earlier Phase 1 work. Phase 2 complete.
+
+2026-04-02: Added thread view reply injection to content.js. isThreadView() detects conversation context via back button presence. buildFullReplyCell() creates full-size reply cells matching Twitter's article>div structure with 40px avatar, name row, tweet text, and action row (reply/retweet/like). In thread view, fake replies are interleaved with real replies; in timeline view, compact preview containers are used as before. Phase 3 task 1 complete.
