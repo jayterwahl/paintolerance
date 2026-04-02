@@ -15,3 +15,7 @@
 2026-04-02: Phase 2 tasks 2–5 (identity generation, metrics, intensity slider) were already implemented in earlier Phase 1 work. Phase 2 complete.
 
 2026-04-02: Added thread view reply injection to content.js. isThreadView() detects conversation context via back button presence. buildFullReplyCell() creates full-size reply cells matching Twitter's article>div structure with 40px avatar, name row, tweet text, and action row (reply/retweet/like). In thread view, fake replies are interleaved with real replies; in timeline view, compact preview containers are used as before. Phase 3 task 1 complete.
+
+2026-04-02: Added edge case handling to content.js and selectors.js. Quoted tweets (user's tweet embedded inside someone else's quote tweet) are now skipped — no fake replies injected. Thread continuations are detected by checking if the next cell contains another tweet by the same user; only the last tweet in a thread gets fake replies. Added QUOTE_CONTAINER and SOCIAL_CONTEXT selectors. Phase 3 task 2 (edge cases) complete. Phase 3 is now complete.
+
+2026-04-02: Created icons/ directory with icon16.png, icon48.png, icon128.png — programmatically generated PNGs. Dark circle (#1a1a2e) with bold red/pink "Y" (#e94560) letter. Readable at all three sizes. Matches manifest.json icon references. Phase 4 task 1 (extension icons and branding) complete.
