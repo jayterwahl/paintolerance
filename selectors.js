@@ -41,6 +41,12 @@ const GOM_SELECTORS = {
   // Conversation thread (reply list in thread view)
   TWEET_THREAD: 'section[role="region"]',
 
+  // Quoted tweet container (inner quote card inside a tweet)
+  QUOTE_CONTAINER: '[data-testid="quoteTweet"]',
+
+  // Social context label (e.g., "User retweeted", thread indicators)
+  SOCIAL_CONTEXT: '[data-testid="socialContext"]',
+
   // Marker attribute to flag processed tweets
   MARKER_ATTR: 'data-gom-yapped',
 };

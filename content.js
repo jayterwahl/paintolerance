@@ -50,6 +50,45 @@ const GOM_CONTENT = (() => {
     return text.includes('@' + handle);
   }
 
+  /**
+   * Check if a tweet is embedded inside a quoted tweet card.
+   * We should not inject replies on quoted tweets — only on standalone tweets.
+   */
+  function isQuotedTweet(tweetEl) {
+    return !!tweetEl.closest(GOM_SELECTORS.QUOTE_CONTAINER);
+  }
+
+  /**
+   * Check if a tweet is a continuation of a user's thread (not the last tweet).
+   * In a thread, intermediate tweets have a connecting line (vertical bar)
+   * to the next tweet. We only inject on the last tweet in a thread to avoid
+   * flooding every single tweet in a long thread.
+   */
+  function isThreadContinuation(tweetEl) {
+    const article = tweetEl.closest('article') || tweetEl;
+    const cellDiv = article.closest('[data-testid="cellInnerDiv"]') || article.parentElement;
+    if (!cellDiv) return false;
+
+    // Twitter draws a vertical connecting line between thread tweets.
+    // The cell containing a non-terminal thread tweet has a sibling cell
+    // with a connecting line element before the next tweet.
+    // Check if this cell's article has a vertical connector below it
+    // (usually rendered as a div with a specific height between thread tweets).
+    const nextCell = cellDiv.nextElementSibling;
+    if (!nextCell) return false;
+
+    // If the next cell contains a tweet by the same user and doesn't have
+    // social context (retweet/like label), this is a thread continuation.
+    const nextTweet = nextCell.querySelector(GOM_SELECTORS.TWEET_CELL);
+    if (nextTweet && isUserTweet(nextTweet)) {
+      // Verify it's not a retweet or social context item
+      const hasSocialContext = nextCell.querySelector(GOM_SELECTORS.SOCIAL_CONTEXT);
+      if (!hasSocialContext) return true;
+    }
+
+    return false;
+  }
+
   // ── DOM Builder ──────────────────────────────────────────────────
 
   /**
@@ -367,6 +406,12 @@ const GOM_CONTENT = (() => {
 
       // Only process the user's own tweets
       if (!isUserTweet(tweet)) continue;
+
+      // Skip quoted tweets (user's tweet embedded inside someone else's tweet)
+      if (isQuotedTweet(tweet)) continue;
+
+      // Skip thread continuations (only inject on the last tweet in a thread)
+      if (isThreadContinuation(tweet)) continue;
 
       injectReplies(tweet);
     }
