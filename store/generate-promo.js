@@ -34,7 +34,7 @@ function generatePromoTile(width, height, filename) {
   ctx.fillStyle = '#e7e9ea';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('Gom Yapper', width / 2, height * 0.35);
+  ctx.fillText('Pain Tolerance', width / 2, height * 0.35);
 
   // Subtitle
   const subSize = Math.round(width * 0.04);

@@ -1,13 +1,13 @@
-CHROME WEB STORE LISTING — Gom Yapper
-======================================
+CHROME WEB STORE LISTING — Pain Tolerance
+==========================================
 
-TITLE: Gom Yapper — Resilience Training for Your Timeline
+TITLE: Pain Tolerance — Simulated Hostile Replies for Your Tweets
 
 SHORT DESCRIPTION (132 chars max):
-Simulated hostile replies on your tweets to build immunity against internet scorn. No AI, no API keys, no data collection.
+Simulated hostile replies on your own tweets to build up your pain tolerance for internet nonsense. No AI, no API keys.
 
 DETAILED DESCRIPTION:
-The internet is full of bots and bad-faith reply guys trying to get a rise out of you. The Gom Yapper helps you build immunity.
+The internet is full of bots and bad-faith reply guys trying to get a rise out of you. Pain Tolerance helps you build immunity.
 
 This extension adds simulated hostile replies to your own tweets — mean, dismissive, off-topic, and completely fake. The replies come from generated personas and are produced entirely offline. No AI, no API keys, no data collection.
 
@@ -29,8 +29,6 @@ HOW IT WORKS
 
 THE TRAINING
 Over time, you'll notice the pattern: these replies contain no real argumentation, no substance, no signal. They are pure noise. Once you can spot it in simulation, you'll spot it in the wild.
-
-Named after the gom jabbar from Dune — a test of whether you can master your instincts under pressure.
 
 PRIVACY
 • No data collection — the only stored data is your handle and preferences

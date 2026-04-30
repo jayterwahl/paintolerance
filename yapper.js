@@ -1,13 +1,13 @@
 /**
- * Gom Yapper — Yapper Engine
+ * Pain Tolerance — Reply Engine
  *
  * Produces complete fake reply objects using corpus data, avatar generation,
  * and deterministic seeding from tweet IDs.
  *
- * Depends on: GOM_CORPUS (corpus.js), GOM_AVATARS (avatars.js)
+ * Depends on: PT_CORPUS (corpus.js), PT_AVATARS (avatars.js)
  */
 
-const GOM_YAPPER = (() => {
+const PT_YAPPER = (() => {
   // Simple seeded PRNG (LCG)
   function makeRng(seed) {
     let s = seed | 0;
@@ -33,7 +33,7 @@ const GOM_YAPPER = (() => {
 
   // Weighted random selection of an archetype
   function pickArchetype(rng) {
-    const archetypes = GOM_CORPUS.archetypes;
+    const archetypes = PT_CORPUS.archetypes;
     const totalWeight = archetypes.reduce((sum, a) => sum + a.weight, 0);
     let roll = rng() * totalWeight;
     for (const arch of archetypes) {
@@ -46,7 +46,7 @@ const GOM_YAPPER = (() => {
   // Fill {slot} placeholders in a template string
   function fillSlots(template, rng) {
     return template.replace(/\{(\w+)\}/g, (_, slot) => {
-      const fillers = GOM_CORPUS.fillers[slot];
+      const fillers = PT_CORPUS.fillers[slot];
       if (!fillers || fillers.length === 0) return `{${slot}}`;
       return pick(fillers, rng);
     });
@@ -54,7 +54,7 @@ const GOM_YAPPER = (() => {
 
   // Generate a display name
   function generateDisplayName(rng) {
-    const id = GOM_CORPUS.identity;
+    const id = PT_CORPUS.identity;
     const first = pick(id.firstNames, rng);
 
     // 50% chance of appending a last fragment
@@ -66,7 +66,7 @@ const GOM_YAPPER = (() => {
 
   // Generate a handle matching real Twitter patterns
   function generateHandle(rng) {
-    const id = GOM_CORPUS.identity;
+    const id = PT_CORPUS.identity;
     const pattern = pick(id.handlePatterns, rng);
 
     if (pattern === '{first}{4digit}') {
@@ -128,7 +128,31 @@ const GOM_YAPPER = (() => {
       replies = Math.floor(rng() * 5) + 4;
     }
 
-    return { likes, retweets, replies };
+    // Views: always some, power-law leaning small
+    let views;
+    const viewRoll = rng();
+    if (viewRoll < 0.50) {
+      views = Math.floor(rng() * 450) + 50;    // 50–499
+    } else if (viewRoll < 0.80) {
+      views = Math.floor(rng() * 1500) + 500;  // 500–1,999
+    } else if (viewRoll < 0.95) {
+      views = Math.floor(rng() * 3000) + 2000; // 2,000–4,999
+    } else {
+      views = Math.floor(rng() * 15000) + 5000; // 5,000–20,000
+    }
+
+    // Bookmarks: 70% zero, occasionally a few
+    let bookmarks;
+    const bkRoll = rng();
+    if (bkRoll < 0.70) {
+      bookmarks = 0;
+    } else if (bkRoll < 0.90) {
+      bookmarks = Math.floor(rng() * 3) + 1;
+    } else {
+      bookmarks = Math.floor(rng() * 17) + 4;
+    }
+
+    return { likes, retweets, replies, views, bookmarks };
   }
 
   // Generate a relative timestamp string (e.g., "2m", "1h", "3h")
@@ -167,7 +191,7 @@ const GOM_YAPPER = (() => {
     const displayName = generateDisplayName(rng);
     const handle = generateHandle(rng);
     const verified = rng() < 0.20; // ~20% blue check
-    const avatar = GOM_AVATARS.generate(handle, displayName);
+    const avatar = PT_AVATARS.generate(handle, displayName);
 
     // 5. Generate metrics
     const metrics = generateMetrics(rng);

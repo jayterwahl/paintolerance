@@ -1,11 +1,11 @@
 /**
- * Gom Yapper — DOM Selector Map
+ * Pain Tolerance — DOM Selector Map
  *
  * Centralizes all Twitter/X DOM selectors so that when Twitter ships
  * DOM changes, only this file needs updating.
  */
 
-const GOM_SELECTORS = {
+const PT_SELECTORS = {
   // Outermost container for a single tweet
   TWEET_CELL: '[data-testid="tweet"]',
 
@@ -48,5 +48,5 @@ const GOM_SELECTORS = {
   SOCIAL_CONTEXT: '[data-testid="socialContext"]',
 
   // Marker attribute to flag processed tweets
-  MARKER_ATTR: 'data-gom-yapped',
+  MARKER_ATTR: 'data-pt-yapped',
 };

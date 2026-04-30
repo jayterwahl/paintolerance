@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Gom Yapper",
+  "name": "Pain Tolerance",
   "version": "1.0.0",
-  "description": "Resilience training for your timeline. Simulated hostile replies to harden you against internet scorn.",
+  "description": "Simulated hostile replies on your own tweets to build up your pain tolerance for internet nonsense.",
   "permissions": ["storage"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

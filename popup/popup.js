@@ -40,7 +40,7 @@
       statusEl.textContent = 'Enter your handle to begin';
       statusEl.className = 'status';
     } else if (active) {
-      statusEl.textContent = 'Yapping on twitter.com / x.com';
+      statusEl.textContent = 'Active on twitter.com / x.com';
       statusEl.className = 'status on';
     } else {
       statusEl.textContent = 'Inactive';

@@ -1,12 +1,12 @@
 /**
- * Gom Yapper — Avatar Generator
+ * Pain Tolerance — Avatar Generator
  *
  * Generates profile picture data URLs using an offscreen canvas.
  * The fake username is hashed to deterministically select background color,
  * foreground letter, and style variations.
  */
 
-const GOM_AVATARS = (() => {
+const PT_AVATARS = (() => {
   // Curated palette of ~20 muted tones matching common Twitter avatar colors
   const PALETTE = [
     '#6B7280', '#9CA3AF', '#EF4444', '#F97316', '#F59E0B',
