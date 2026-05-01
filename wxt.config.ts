@@ -19,6 +19,12 @@ export default defineConfig({
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'self'",
     },
+    web_accessible_resources: [
+      {
+        matches: ['*://twitter.com/*', '*://x.com/*'],
+        resources: ['/avatar-pool/*'],
+      },
+    ],
     icons,
     action: {
       default_icon: icons,

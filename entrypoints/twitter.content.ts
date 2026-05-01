@@ -505,6 +505,14 @@ export default defineContentScript({
       : String(count);
   }
 
+  function resolveAvatarUrl(avatar: string): string {
+    if (!avatar) return '';
+    if (avatar.startsWith('/') && !avatar.startsWith('//')) {
+      return browser.runtime.getURL(avatar as Parameters<typeof browser.runtime.getURL>[0]);
+    }
+    return avatar;
+  }
+
   /**
    * Build a compact reply preview element matching Twitter's native
    * reply preview structure beneath a tweet on timeline/profile view.
@@ -518,7 +526,7 @@ export default defineContentScript({
 
     // Avatar
     const avatarImg = document.createElement('img');
-    avatarImg.src = reply.avatar;
+    avatarImg.src = resolveAvatarUrl(reply.avatar);
     avatarImg.alt = '';
     avatarImg.style.cssText =
       'width:32px;height:32px;border-radius:50%;flex-shrink:0;';
@@ -1097,6 +1105,40 @@ export default defineContentScript({
     return threadResizeObserver;
   }
 
+  function setReplyAvatar(root: Element, avatarPath: string): void {
+    const src = resolveAvatarUrl(avatarPath);
+    if (!src) return;
+
+    const existing = root.querySelector<HTMLImageElement>(`${PT_SELECTORS.TWEET_AVATAR} img, img[src], img`);
+    if (existing) {
+      existing.src = src;
+      existing.srcset = '';
+      existing.alt = '';
+      return;
+    }
+
+    const avatarRoot = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_AVATAR);
+    if (!avatarRoot) return;
+
+    const avatarContainer = avatarRoot.querySelector<HTMLElement>('[data-testid^="UserAvatar-Container-"]') ??
+      avatarRoot.querySelector<HTMLElement>('a') ??
+      avatarRoot;
+
+    avatarContainer.querySelector<HTMLImageElement>('img[data-pt-avatar="true"]')?.remove();
+    setImportant(avatarContainer, 'position', 'relative');
+    setImportant(avatarContainer, 'overflow', 'hidden');
+    setImportant(avatarContainer, 'border-radius', '9999px');
+
+    const injected = document.createElement('img');
+    injected.setAttribute('data-pt-avatar', 'true');
+    injected.src = src;
+    injected.alt = '';
+    injected.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;' +
+      'border-radius:9999px;z-index:2;display:block;pointer-events:none;';
+    avatarContainer.appendChild(injected);
+  }
+
   function buildThreadReplyFromTemplate(
     reply: GeneratedReply,
     templateBoundary: Element,
@@ -1112,12 +1154,7 @@ export default defineContentScript({
     tweet?.removeAttribute(PT_SELECTORS.MARKER_ATTR);
     tweet?.setAttribute('data-pt-fake-reply', 'true');
 
-    const avatar = clone.querySelector<HTMLImageElement>(`${PT_SELECTORS.TWEET_AVATAR} img, img[src], img`);
-    if (avatar) {
-      avatar.src = reply.avatar;
-      avatar.srcset = '';
-      avatar.alt = '';
-    }
+    setReplyAvatar(clone, reply.avatar);
 
     const author = clone.querySelector(PT_SELECTORS.TWEET_AUTHOR);
     replaceFirstMatchingSpan(
