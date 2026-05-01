@@ -374,9 +374,8 @@ export default defineContentScript({
 
   // ── Helpers ──────────────────────────────────────────────────────
 
-  function getReplyCount(): number {
-    const [min, max] = INTENSITY_MAP[intensity] || INTENSITY_MAP.medium;
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+  function getGeneratedReplyCount(tweetId: string): number {
+    return PT_YAPPER.generateReplyCount(tweetId, INTENSITY_MAP[intensity] || INTENSITY_MAP.medium);
   }
 
   /**
@@ -621,22 +620,42 @@ export default defineContentScript({
     return true;
   }
 
+  function createMetricTransition(action: Element): HTMLElement | null {
+    const inner = action.querySelector<HTMLElement>('div[dir="ltr"]') ??
+      action.querySelector<HTMLElement>('div') ??
+      (action instanceof HTMLElement ? action : null);
+    if (!inner) return null;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'css-175oi2r r-xoduu5 r-1udh08x';
+    wrapper.innerHTML =
+      '<span data-testid="app-text-transition-container" style="transition-property: transform; transition-duration: 0.3s; transform: translate3d(0px, 0px, 0px);">' +
+        '<span class="css-1jxf684 r-1ttztb7 r-qvutc0 r-poiln3 r-n6v787 r-1cwl3u0 r-1k6nrdp r-n7gxbd">' +
+          '<span class="css-1jxf684 r-bcqeeo r-1ttztb7 r-qvutc0 r-poiln3"></span>' +
+        '</span>' +
+      '</span>';
+    inner.appendChild(wrapper);
+    return wrapper.querySelector<HTMLElement>('[data-testid="app-text-transition-container"]');
+  }
+
   function setMetricText(action: Element, count: number): void {
-    const transition = action.querySelector('[data-testid="app-text-transition-container"]');
-    if (!transition) return;
+    let transition = action.querySelector<HTMLElement>('[data-testid="app-text-transition-container"]');
 
     if (count <= 0) {
-      transition.remove();
+      transition?.remove();
       return;
     }
+
+    transition ??= createMetricTransition(action);
+    if (!transition) return;
 
     const metric = formatMetric(count);
     const leaf = transition.querySelector<HTMLElement>('span > span') ??
       Array.from(transition.querySelectorAll<HTMLElement>('span')).reverse()
         .find(span => span.children.length === 0) ??
-      (transition instanceof HTMLElement ? transition : null);
+      transition;
 
-    if (leaf) leaf.textContent = metric;
+    leaf.textContent = metric;
   }
 
   function setActionMetric(root: Element, testId: string, count: number): void {
@@ -1045,7 +1064,7 @@ export default defineContentScript({
     threadInjections.clear();
   }
 
-  function clearInjectedArtifacts(): void {
+  function clearInjectedArtifacts({ clearMarkers = true }: { clearMarkers?: boolean } = {}): void {
     clearThreadInjections();
 
     for (const [, entry] of vsMap) entry.container.remove();
@@ -1056,9 +1075,12 @@ export default defineContentScript({
     document.getElementById('pt-vs-overlay')?.remove();
 
     document.querySelectorAll<HTMLElement>('.pt-reply-container, [data-pt-fake-reply="true"]').forEach(el => el.remove());
-    document.querySelectorAll(`${PT_SELECTORS.TWEET_CELL}[${PT_SELECTORS.MARKER_ATTR}]`).forEach(tweet => {
-      tweet.removeAttribute(PT_SELECTORS.MARKER_ATTR);
-    });
+    if (clearMarkers) {
+      restoreGeneratedReplyCounts();
+      document.querySelectorAll(`${PT_SELECTORS.TWEET_CELL}[${PT_SELECTORS.MARKER_ATTR}]`).forEach(tweet => {
+        tweet.removeAttribute(PT_SELECTORS.MARKER_ATTR);
+      });
+    }
   }
 
   function scheduleThreadRelayout(): void {
@@ -1160,17 +1182,49 @@ export default defineContentScript({
     return Math.round(parsed);
   }
 
+  function getReplyAction(tweetEl: Element): HTMLElement | null {
+    return tweetEl.querySelector<HTMLElement>(PT_SELECTORS.REPLY_BUTTON);
+  }
+
   function getDisplayedReplyCount(tweetEl: Element): number {
     const countEl = tweetEl.querySelector(PT_SELECTORS.REPLY_COUNT);
     return countEl ? parseMetricText(countEl.textContent ?? '') : 0;
   }
 
+  function getBaseReplyCount(tweetEl: Element): number {
+    const action = getReplyAction(tweetEl);
+    if (!action) return getDisplayedReplyCount(tweetEl);
+
+    const stored = action.getAttribute('data-pt-base-reply-count');
+    if (stored !== null) return parseMetricText(stored);
+
+    const base = getDisplayedReplyCount(tweetEl);
+    action.setAttribute('data-pt-base-reply-count', String(base));
+    return base;
+  }
+
+  function applyGeneratedReplyCount(tweetEl: Element, generatedCount: number): void {
+    const action = getReplyAction(tweetEl);
+    if (!action) return;
+
+    const total = getBaseReplyCount(tweetEl) + generatedCount;
+    setMetricText(action, total);
+    action.setAttribute('data-pt-generated-reply-count', String(generatedCount));
+    action.setAttribute('aria-label', total > 0 ? `${formatMetric(total)} Replies. Reply` : 'Reply');
+  }
+
   function inflateReplyCount(tweetEl: Element, addedCount: number): void {
-    const countEl = tweetEl.querySelector(PT_SELECTORS.REPLY_COUNT);
-    if (!countEl) return;
-    const span = countEl.querySelector('span > span');
-    if (!span) return;
-    span.textContent = String(getDisplayedReplyCount(tweetEl) + addedCount);
+    applyGeneratedReplyCount(tweetEl, addedCount);
+  }
+
+  function restoreGeneratedReplyCounts(): void {
+    document.querySelectorAll<HTMLElement>('[data-pt-base-reply-count]').forEach((action) => {
+      const base = parseMetricText(action.getAttribute('data-pt-base-reply-count') ?? '0');
+      setMetricText(action, base);
+      action.setAttribute('aria-label', base > 0 ? `${formatMetric(base)} Replies. Reply` : 'Reply');
+      action.removeAttribute('data-pt-base-reply-count');
+      action.removeAttribute('data-pt-generated-reply-count');
+    });
   }
 
   // ── Thread view detection ─────────────────────────────────────────
@@ -1410,7 +1464,7 @@ export default defineContentScript({
     const focalTweetId = getFocalTweetId();
     if (!cellDiv || !isThreadView() || focalTweetId !== tweetId) return;
 
-    const count = getReplyCount();
+    const count = getGeneratedReplyCount(tweetId);
     const displayedReplyCount = getDisplayedReplyCount(tweetEl);
     const replies = PT_YAPPER.generateReplies(tweetId, count);
 
@@ -1442,13 +1496,13 @@ export default defineContentScript({
       clearInjectedArtifacts();
     }
 
-    // Only inject full fake replies on a tweet detail page. Profile/timeline
-    // pages should show Twitter/X's native cards only.
-    if (!isThreadView() || !getFocalTweetId()) {
-      clearInjectedArtifacts();
-      debug(`skipping non-status page\nhandle=${userHandle}\nurl=${location.pathname}`);
-      scheduleQaReport('skipping non-status page');
-      return;
+    const shouldInjectThreadReplies = isThreadView() && getFocalTweetId() !== null;
+
+    // Profile/timeline pages should show Twitter/X's native cards only, but we
+    // still update reply counts so they match the deterministic injected count
+    // users will see after clicking through to a status page.
+    if (!shouldInjectThreadReplies) {
+      clearInjectedArtifacts({ clearMarkers: false });
     }
 
     const tweets = document.querySelectorAll(PT_SELECTORS.TWEET_CELL);
@@ -1473,7 +1527,14 @@ export default defineContentScript({
       // Skip thread continuations (only inject on the last tweet in a thread)
       if (isThreadContinuation(tweet)) continue;
 
-      injectReplies(tweet);
+      if (shouldInjectThreadReplies) {
+        injectReplies(tweet);
+      } else {
+        const tweetId = extractTweetId(tweet);
+        if (!tweetId) continue;
+        applyGeneratedReplyCount(tweet, getGeneratedReplyCount(tweetId));
+        tweet.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
+      }
     }
 
     debug(`processed tweets\nhandle=${userHandle}\nactive=${isActive}\nscanned=${tweets.length}\nuserTweets=${userTweetCount}\nmarked=${markedTweetCount}\nurl=${location.pathname}`);
@@ -1551,12 +1612,16 @@ export default defineContentScript({
   function handleStorageChange(changes: Record<string, StorageChange>, area: string): void {
     if (area !== 'sync') return;
 
+    const shouldRecalculate = Boolean(changes.handle || changes.intensity);
+
     if (changes.handle) userHandle = typeof changes.handle.newValue === 'string' ? changes.handle.newValue : '';
     if (changes.active) isActive = changes.active.newValue === true;
     if (changes.intensity) intensity = normalizeIntensity(changes.intensity.newValue);
 
     if (isActive && userHandle) {
+      if (shouldRecalculate) clearInjectedArtifacts();
       startObserver();
+      processTweets();
     } else {
       stopObserver();
     }

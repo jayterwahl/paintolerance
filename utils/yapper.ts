@@ -238,6 +238,19 @@ export const PT_YAPPER = (() => {
   }
 
   /**
+   * Deterministically choose how many fake replies a tweet should receive.
+   *
+   * The range comes from the user's intensity setting; the selected value is
+   * stable for the same tweet seed so profile cards and status pages agree.
+   */
+  function generateReplyCount(tweetSeed: string, range: readonly [number, number]): number {
+    const [rawMin, rawMax] = range;
+    const min = Math.max(0, Math.floor(Math.min(rawMin, rawMax)));
+    const max = Math.max(min, Math.floor(Math.max(rawMin, rawMax)));
+    return min + (hashStr(tweetSeed) % (max - min + 1));
+  }
+
+  /**
    * Generate a batch of fake replies for a tweet.
    *
    * @param {string} tweetId - The tweet's unique ID (for deterministic seeding)
@@ -255,5 +268,5 @@ export const PT_YAPPER = (() => {
     return replies;
   }
 
-  return { generateReply, generateReplies };
+  return { generateReply, generateReplyCount, generateReplies };
 })();
