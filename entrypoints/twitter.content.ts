@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { PT_SELECTORS } from '../utils/selectors';
+import { THREAD_REPLY_TEMPLATE_HTML } from '../utils/thread-reply-template';
 import { PT_YAPPER, type GeneratedReply } from '../utils/yapper';
 
 /**
@@ -1150,13 +1151,26 @@ export default defineContentScript({
 
   // ── Reply Count Inflation ────────────────────────────────────────
 
+  function parseMetricText(value: string): number {
+    const text = value.trim().toUpperCase();
+    const parsed = Number.parseFloat(text.replace(/,/g, ''));
+    if (!Number.isFinite(parsed)) return 0;
+    if (text.endsWith('K')) return Math.round(parsed * 1000);
+    if (text.endsWith('M')) return Math.round(parsed * 1000000);
+    return Math.round(parsed);
+  }
+
+  function getDisplayedReplyCount(tweetEl: Element): number {
+    const countEl = tweetEl.querySelector(PT_SELECTORS.REPLY_COUNT);
+    return countEl ? parseMetricText(countEl.textContent ?? '') : 0;
+  }
+
   function inflateReplyCount(tweetEl: Element, addedCount: number): void {
     const countEl = tweetEl.querySelector(PT_SELECTORS.REPLY_COUNT);
     if (!countEl) return;
     const span = countEl.querySelector('span > span');
     if (!span) return;
-    const current = parseInt(span.textContent ?? '', 10) || 0;
-    span.textContent = String(current + addedCount);
+    span.textContent = String(getDisplayedReplyCount(tweetEl) + addedCount);
   }
 
   // ── Thread view detection ─────────────────────────────────────────
@@ -1242,10 +1256,71 @@ export default defineContentScript({
     return parent.querySelector(`[data-pt-parent-tweet="${tweetId}"]`) !== null;
   }
 
+  function createHardcodedThreadReplyTemplate(parent: HTMLElement, width: number): HTMLElement | null {
+    const template = document.createElement('template');
+    template.innerHTML = THREAD_REPLY_TEMPLATE_HTML.trim();
+    const boundary = template.content.firstElementChild;
+    if (!(boundary instanceof HTMLElement)) return null;
+
+    setAbsoluteVirtualLayout(boundary, -100000, width);
+    setImportant(boundary, 'visibility', 'hidden');
+    setImportant(boundary, 'pointer-events', 'none');
+    setImportant(boundary, 'z-index', '-1');
+    parent.appendChild(boundary);
+    return boundary;
+  }
+
+  function injectFallbackThreadReplies(
+    tweetId: string,
+    cellDiv: Element,
+    replies: readonly GeneratedReply[],
+  ): boolean {
+    const parent = cellDiv.parentElement;
+    if (!(parent instanceof HTMLElement)) return false;
+
+    const parentRect = parent.getBoundingClientRect();
+    const templateBoundary = createHardcodedThreadReplyTemplate(parent, parentRect.width);
+    if (!templateBoundary) return false;
+
+    const templateRect = templateBoundary.getBoundingClientRect();
+    const itemHeight = Math.max(1, templateRect.height);
+    const insertionAnchor = cellDiv.nextSibling;
+    const fakes: HTMLElement[] = [];
+
+    replies.forEach((reply, index) => {
+      const fake = buildThreadReplyFromTemplate(reply, templateBoundary, tweetId);
+      prepareThreadCloneLayout(fake, itemHeight * index, parentRect.width);
+      fakes.push(fake);
+      parent.insertBefore(fake, insertionAnchor);
+    });
+
+    templateBoundary.remove();
+
+    const entry: ThreadInjection = {
+      tweetId,
+      parent,
+      cell: cellDiv,
+      fakes,
+      shiftedSiblings: [],
+      itemHeight,
+      originalParentMinHeight: parent.style.minHeight,
+      originalParentHeight: parentRect.height,
+    };
+    threadInjections.set(tweetId, entry);
+
+    const resizeObserver = getThreadResizeObserver();
+    resizeObserver?.observe(parent);
+    if (cellDiv instanceof Element) resizeObserver?.observe(cellDiv);
+
+    layoutThreadInjection(entry);
+    return true;
+  }
+
   function injectFocalThreadReplies(
     tweetId: string,
     cellDiv: Element,
     replies: readonly GeneratedReply[],
+    displayedReplyCount: number,
   ): boolean {
     const parent = cellDiv.parentElement;
     if (!parent) return false;
@@ -1253,9 +1328,12 @@ export default defineContentScript({
 
     const templateBoundary = findFirstThreadReplyBoundaryAfter(cellDiv, tweetId);
     if (!templateBoundary) {
-      // Wait for at least one real reply to render. We clone it as the visual
-      // template so fake replies match the live Twitter/X UI exactly.
-      return false;
+      // If X says real replies exist, wait for one to render so we can clone its
+      // native cell. If the post has no real replies, use the hardcoded captured
+      // reply-cell template instead of doing nothing forever.
+      return displayedReplyCount > 0
+        ? false
+        : injectFallbackThreadReplies(tweetId, cellDiv, replies);
     }
 
     if (!(parent instanceof HTMLElement)) return false;
@@ -1333,9 +1411,10 @@ export default defineContentScript({
     if (!cellDiv || !isThreadView() || focalTweetId !== tweetId) return;
 
     const count = getReplyCount();
+    const displayedReplyCount = getDisplayedReplyCount(tweetEl);
     const replies = PT_YAPPER.generateReplies(tweetId, count);
 
-    if (!injectFocalThreadReplies(tweetId, cellDiv, replies)) {
+    if (!injectFocalThreadReplies(tweetId, cellDiv, replies, displayedReplyCount)) {
       debug(`waiting for real reply template\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
       scheduleQaReport('waiting for real reply template');
       return;
