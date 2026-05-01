@@ -251,6 +251,17 @@ export const PT_YAPPER = (() => {
   }
 
   /**
+   * Deterministically choose a fake reply view count below the parent tweet's
+   * current view count. The hashed seed becomes a stable percentage, so the
+   * value scales proportionally as the parent tweet gains views.
+   */
+  function generateReplyViewCount(replySeed: string, parentTweetViews: number): number {
+    const upperExclusive = Math.max(2, Math.floor(parentTweetViews));
+    const percentage = ((hashStr(replySeed) % 10000) + 1) / 10001;
+    return Math.min(upperExclusive - 1, Math.max(1, Math.floor(percentage * upperExclusive)));
+  }
+
+  /**
    * Generate a batch of fake replies for a tweet.
    *
    * @param {string} tweetId - The tweet's unique ID (for deterministic seeding)
@@ -268,5 +279,5 @@ export const PT_YAPPER = (() => {
     return replies;
   }
 
-  return { generateReply, generateReplyCount, generateReplies };
+  return { generateReply, generateReplyCount, generateReplyViewCount, generateReplies };
 })();

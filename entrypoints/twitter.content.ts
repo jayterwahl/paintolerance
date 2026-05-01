@@ -672,6 +672,16 @@ export default defineContentScript({
     setMetricText(action, count);
   }
 
+  function setViewsMetric(root: Element, count: number): void {
+    const action = root.querySelector<HTMLElement>(
+      'a[href*="/analytics"], [aria-label*="View post analytics"], [aria-label*="view post analytics"]',
+    );
+    if (!action) return;
+
+    setMetricText(action, count);
+    action.setAttribute('aria-label', `${formatMetric(count)} views. View post analytics`);
+  }
+
   function actionItemFor(row: Element, descendant: Element | null): HTMLElement | null {
     if (!descendant) return null;
 
@@ -1143,6 +1153,7 @@ export default defineContentScript({
     reply: GeneratedReply,
     templateBoundary: Element,
     parentTweetId: string,
+    parentTweetViews: number,
   ): HTMLElement {
     const clone = templateBoundary.cloneNode(true) as HTMLElement;
     clone.classList.add('pt-reply-container');
@@ -1182,6 +1193,10 @@ export default defineContentScript({
     setActionMetric(clone, 'reply', reply.metrics.replies);
     setActionMetric(clone, 'retweet', reply.metrics.retweets);
     resetLikeAction(clone, reply.metrics.likes);
+    setViewsMetric(
+      clone,
+      PT_YAPPER.generateReplyViewCount(`${parentTweetId}:${reply.handle}:${reply.text}`, parentTweetViews),
+    );
     ensureBookmarkAction(clone, templateBoundary);
     alignActionRowToTemplate(clone, templateBoundary);
     ensureHeaderControls(clone, templateBoundary);
@@ -1216,7 +1231,49 @@ export default defineContentScript({
     if (!Number.isFinite(parsed)) return 0;
     if (text.endsWith('K')) return Math.round(parsed * 1000);
     if (text.endsWith('M')) return Math.round(parsed * 1000000);
+    if (text.endsWith('B')) return Math.round(parsed * 1000000000);
     return Math.round(parsed);
+  }
+
+  function parseViewCountText(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const normalized = value.replace(/\u00a0/g, ' ');
+    const beforeViews = normalized.match(/([\d,.]+)\s*([KMB]?)\s+views?\b/i);
+    if (beforeViews) {
+      const count = parseMetricText(`${beforeViews[1]}${beforeViews[2]}`);
+      return count > 0 ? count : null;
+    }
+
+    const afterViews = normalized.match(/\bviews?\s+([\d,.]+)\s*([KMB]?)/i);
+    if (afterViews) {
+      const count = parseMetricText(`${afterViews[1]}${afterViews[2]}`);
+      return count > 0 ? count : null;
+    }
+
+    return null;
+  }
+
+  function getTweetViewCount(tweetEl: Element): number {
+    const rows = Array.from(tweetEl.querySelectorAll<HTMLElement>(PT_SELECTORS.TWEET_ACTIONS))
+      .filter(row => !row.closest(PT_SELECTORS.QUOTE_CONTAINER));
+
+    for (const row of rows) {
+      const analytics = row.querySelector<HTMLElement>('a[href*="/analytics"]');
+      const count = parseViewCountText(analytics?.getAttribute('aria-label')) ??
+        parseViewCountText(row.getAttribute('aria-label')) ??
+        (analytics ? parseMetricText(analytics.textContent ?? '') : 0);
+      if (count > 0) return count;
+    }
+
+    const candidates = Array.from(tweetEl.querySelectorAll<HTMLElement>('a[href*="/analytics"], [aria-label*="views"], [aria-label*="Views"]'))
+      .filter(el => !el.closest(PT_SELECTORS.QUOTE_CONTAINER));
+    for (const candidate of candidates) {
+      const count = parseViewCountText(candidate.getAttribute('aria-label')) ??
+        (candidate.matches('a[href*="/analytics"]') ? parseMetricText(candidate.textContent ?? '') : 0);
+      if (count > 0) return count;
+    }
+
+    return 100;
   }
 
   function getReplyAction(tweetEl: Element): HTMLElement | null {
@@ -1365,6 +1422,7 @@ export default defineContentScript({
     tweetId: string,
     cellDiv: Element,
     replies: readonly GeneratedReply[],
+    originalTweetViews: number,
   ): boolean {
     const parent = cellDiv.parentElement;
     if (!(parent instanceof HTMLElement)) return false;
@@ -1379,7 +1437,7 @@ export default defineContentScript({
     const fakes: HTMLElement[] = [];
 
     replies.forEach((reply, index) => {
-      const fake = buildThreadReplyFromTemplate(reply, templateBoundary, tweetId);
+      const fake = buildThreadReplyFromTemplate(reply, templateBoundary, tweetId, originalTweetViews);
       prepareThreadCloneLayout(fake, itemHeight * index, parentRect.width);
       fakes.push(fake);
       parent.insertBefore(fake, insertionAnchor);
@@ -1412,6 +1470,7 @@ export default defineContentScript({
     cellDiv: Element,
     replies: readonly GeneratedReply[],
     displayedReplyCount: number,
+    originalTweetViews: number,
   ): boolean {
     const parent = cellDiv.parentElement;
     if (!parent) return false;
@@ -1424,7 +1483,7 @@ export default defineContentScript({
       // reply-cell template instead of doing nothing forever.
       return displayedReplyCount > 0
         ? false
-        : injectFallbackThreadReplies(tweetId, cellDiv, replies);
+        : injectFallbackThreadReplies(tweetId, cellDiv, replies, originalTweetViews);
     }
 
     if (!(parent instanceof HTMLElement)) return false;
@@ -1441,7 +1500,7 @@ export default defineContentScript({
     const fakes: HTMLElement[] = [];
 
     replies.forEach((reply, index) => {
-      const fake = buildThreadReplyFromTemplate(reply, templateBoundary, tweetId);
+      const fake = buildThreadReplyFromTemplate(reply, templateBoundary, tweetId, originalTweetViews);
       prepareThreadCloneLayout(fake, 0 + itemHeight * index, parentRect.width);
       fakes.push(fake);
       parent.insertBefore(fake, templateBoundary);
@@ -1503,9 +1562,10 @@ export default defineContentScript({
 
     const count = getGeneratedReplyCount(tweetId);
     const displayedReplyCount = getDisplayedReplyCount(tweetEl);
+    const originalTweetViews = getTweetViewCount(tweetEl);
     const replies = PT_YAPPER.generateReplies(tweetId, count);
 
-    if (!injectFocalThreadReplies(tweetId, cellDiv, replies, displayedReplyCount)) {
+    if (!injectFocalThreadReplies(tweetId, cellDiv, replies, displayedReplyCount, originalTweetViews)) {
       debug(`waiting for real reply template\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
       scheduleQaReport('waiting for real reply template');
       return;
