@@ -24,6 +24,25 @@ interface VsEntry {
   container: HTMLDivElement;
 }
 
+interface ShiftedSibling {
+  el: HTMLElement;
+  virtualTop: number;
+  visualTop: number;
+  height: number;
+  originalStyle: string | null;
+}
+
+interface ThreadInjection {
+  tweetId: string;
+  parent: HTMLElement;
+  cell: Element;
+  fakes: HTMLElement[];
+  shiftedSiblings: ShiftedSibling[];
+  itemHeight: number;
+  originalParentMinHeight: string;
+  originalParentHeight: number;
+}
+
 interface StorageChange {
   newValue?: unknown;
 }
@@ -53,6 +72,201 @@ export default defineContentScript({
   const vsMap = new Map<string, VsEntry>();
   let vsRafId: number | null = null;
   let lastUrl = location.href;
+  let debugEl: HTMLDivElement | null = null;
+  let qaReportTimer: number | null = null;
+  const threadInjections = new Map<string, ThreadInjection>();
+  let threadLayoutRafId: number | null = null;
+  let threadResizeObserver: ResizeObserver | null = null;
+
+  function isDebugEnabled(): boolean {
+    return new URLSearchParams(location.search).has('ptdebug') ||
+      localStorage.getItem('PT_DEBUG') === '1';
+  }
+
+  function debug(message: string): void {
+    if (!isDebugEnabled()) return;
+    console.debug('[Pain Tolerance]', message);
+
+    if (!debugEl || !document.contains(debugEl)) {
+      debugEl = document.createElement('div');
+      debugEl.id = 'pt-debug';
+      debugEl.style.cssText =
+        'position:fixed;right:12px;bottom:12px;z-index:2147483647;' +
+        'max-width:360px;padding:10px 12px;border-radius:10px;' +
+        'background:rgba(29,155,240,0.95);color:white;font:12px/16px monospace;' +
+        'white-space:pre-wrap;pointer-events:none;box-shadow:0 4px 24px rgba(0,0,0,0.35);';
+      document.documentElement.appendChild(debugEl);
+    }
+
+    debugEl.textContent = message;
+  }
+
+  function rectOf(el: Element | null): Record<string, number> | null {
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    return {
+      x: Math.round(rect.x * 100) / 100,
+      y: Math.round(rect.y * 100) / 100,
+      top: Math.round(rect.top * 100) / 100,
+      right: Math.round(rect.right * 100) / 100,
+      bottom: Math.round(rect.bottom * 100) / 100,
+      left: Math.round(rect.left * 100) / 100,
+      width: Math.round(rect.width * 100) / 100,
+      height: Math.round(rect.height * 100) / 100,
+    };
+  }
+
+  function styleOf(el: Element | null): Record<string, string> | null {
+    if (!el) return null;
+    const style = window.getComputedStyle(el);
+    return {
+      display: style.display,
+      position: style.position,
+      top: style.top,
+      right: style.right,
+      bottom: style.bottom,
+      left: style.left,
+      transform: style.transform,
+      translate: style.translate,
+      zIndex: style.zIndex,
+      opacity: style.opacity,
+      visibility: style.visibility,
+      overflow: style.overflow,
+      overflowX: style.overflowX,
+      overflowY: style.overflowY,
+      boxSizing: style.boxSizing,
+      margin: style.margin,
+      padding: style.padding,
+      border: style.border,
+      backgroundColor: style.backgroundColor,
+      color: style.color,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
+    };
+  }
+
+  function describeElement(el: Element | null, label: string): Record<string, unknown> | null {
+    if (!el) return null;
+    const htmlEl = el as HTMLElement;
+    return {
+      label,
+      tag: el.tagName.toLowerCase(),
+      id: htmlEl.id || null,
+      className: htmlEl.className || null,
+      dataTestId: htmlEl.dataset?.testid ?? null,
+      ptParentTweet: htmlEl.dataset?.ptParentTweet ?? null,
+      ptFakeReply: htmlEl.dataset?.ptFakeReply ?? null,
+      inlineStyle: htmlEl.getAttribute('style'),
+      rect: rectOf(el),
+      style: styleOf(el),
+      text: (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 220),
+    };
+  }
+
+  function describeSibling(el: Element, index: number): Record<string, unknown> {
+    const tweet = el.querySelector(PT_SELECTORS.TWEET_CELL);
+    return {
+      index,
+      self: describeElement(el, 'sibling'),
+      tweet: describeElement(tweet, 'siblingTweet'),
+      tweetId: tweet ? extractTweetId(tweet) : null,
+      isUserTweet: tweet ? isUserTweet(tweet) : false,
+      isFake: el instanceof HTMLElement && (el.dataset.ptFakeReply === 'true' || el.dataset.ptParentTweet !== undefined),
+    };
+  }
+
+  function collectQaReport(reason: string): Record<string, unknown> {
+    const focalTweetId = getFocalTweetId();
+    const tweets = Array.from(document.querySelectorAll(PT_SELECTORS.TWEET_CELL));
+    const focalTweet = tweets.find(tweet => extractTweetId(tweet) === focalTweetId) ??
+      tweets.find(tweet => isUserTweet(tweet)) ??
+      null;
+    const focalArticle = focalTweet?.closest('article') ?? focalTweet;
+    const focalBoundary = focalArticle ? findCellBoundary(focalArticle) : null;
+    const templateBoundary = focalBoundary && focalTweetId
+      ? findFirstThreadReplyBoundaryAfter(focalBoundary, focalTweetId)
+      : null;
+    const parent = focalBoundary?.parentElement ?? null;
+    const siblings = parent
+      ? Array.from(parent.children).map((child, index) => describeSibling(child, index)).slice(0, 30)
+      : [];
+    const fakes = Array.from(document.querySelectorAll('[data-pt-parent-tweet]'))
+      .map((fake, index) => ({
+        index,
+        self: describeElement(fake, 'fake'),
+        tweet: describeElement(fake.querySelector(PT_SELECTORS.TWEET_CELL), 'fakeTweet'),
+        avatar: describeElement(fake.querySelector(`${PT_SELECTORS.TWEET_AVATAR} img`), 'fakeAvatar'),
+        author: describeElement(fake.querySelector(PT_SELECTORS.TWEET_AUTHOR), 'fakeAuthor'),
+        text: describeElement(fake.querySelector(PT_SELECTORS.TWEET_TEXT), 'fakeText'),
+        actionRow: describeElement(fake.querySelector(PT_SELECTORS.TWEET_ACTIONS), 'fakeActionRow'),
+      }));
+    const realReplies = tweets
+      .filter(tweet => extractTweetId(tweet) !== focalTweetId && !tweet.closest('[data-pt-fake-reply="true"]'))
+      .slice(0, 6)
+      .map((tweet, index) => ({
+        index,
+        tweetId: extractTweetId(tweet),
+        tweet: describeElement(tweet, 'realReplyTweet'),
+        boundary: describeElement(findCellBoundary(tweet.closest('article') ?? tweet), 'realReplyBoundary'),
+        avatar: describeElement(tweet.querySelector(`${PT_SELECTORS.TWEET_AVATAR} img`), 'realReplyAvatar'),
+        author: describeElement(tweet.querySelector(PT_SELECTORS.TWEET_AUTHOR), 'realReplyAuthor'),
+        text: describeElement(tweet.querySelector(PT_SELECTORS.TWEET_TEXT), 'realReplyText'),
+        actionRow: describeElement(tweet.querySelector(PT_SELECTORS.TWEET_ACTIONS), 'realReplyActionRow'),
+      }));
+
+    return {
+      reason,
+      url: location.href,
+      timestamp: new Date().toISOString(),
+      viewport: { width: window.innerWidth, height: window.innerHeight, scrollX, scrollY },
+      settings: { handle: userHandle, active: isActive, intensity },
+      counts: {
+        tweets: tweets.length,
+        userTweets: tweets.filter(tweet => isUserTweet(tweet)).length,
+        fakeNodes: fakes.length,
+      },
+      focalTweetId,
+      focalTweet: describeElement(focalTweet, 'focalTweet'),
+      focalBoundary: describeElement(focalBoundary, 'focalBoundary'),
+      focalParent: describeElement(parent, 'focalParent'),
+      templateBoundary: describeElement(templateBoundary, 'templateBoundary'),
+      templateTweet: describeElement(templateBoundary?.querySelector(PT_SELECTORS.TWEET_CELL) ?? null, 'templateTweet'),
+      fakes,
+      realReplies,
+      siblings,
+    };
+  }
+
+  async function sendQaReport(reason: string): Promise<void> {
+    if (!isDebugEnabled()) return;
+    const report = collectQaReport(reason);
+
+    try {
+      const response = await browser.runtime.sendMessage({
+        type: 'pain-tolerance:qa-report',
+        report,
+      }) as { ok?: boolean; endpoint?: string; error?: string } | undefined;
+
+      if (response?.ok) {
+        debug(`${reason}\nQA report saved\nendpoint=${response.endpoint ?? '(unknown)'}\nfakes=${(report.fakes as unknown[]).length}\ntweets=${(report.counts as { tweets: number }).tweets}`);
+      } else {
+        debug(`${reason}\nQA report failed in background\n${response?.error ?? 'No response from background'}`);
+      }
+    } catch (error) {
+      debug(`${reason}\nQA report messaging failed\n${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  function scheduleQaReport(reason: string): void {
+    if (!isDebugEnabled()) return;
+    if (qaReportTimer !== null) window.clearTimeout(qaReportTimer);
+    qaReportTimer = window.setTimeout(() => {
+      qaReportTimer = null;
+      void sendQaReport(reason);
+    }, 400);
+  }
 
   function getVsOverlay(): HTMLDivElement {
     if (!vsOverlay || !document.contains(vsOverlay)) {
@@ -183,9 +397,12 @@ export default defineContentScript({
   function isUserTweet(tweetEl: Element): boolean {
     const authorEl = tweetEl.querySelector(PT_SELECTORS.TWEET_AUTHOR);
     if (!authorEl) return false;
-    const text = (authorEl.textContent ?? '').toLowerCase();
+
     const handle = userHandle.toLowerCase().replace(/^@/, '');
-    return text.includes('@' + handle);
+    const rawText = (authorEl.textContent ?? '').toLowerCase();
+    const compactText = rawText.replace(/\s+/g, '');
+
+    return compactText.includes('@' + handle) || compactText.includes(handle);
   }
 
   /**
@@ -282,6 +499,12 @@ export default defineContentScript({
 
   // ── DOM Builder ──────────────────────────────────────────────────
 
+  function formatMetric(count: number): string {
+    return count >= 1000
+      ? (count / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
+      : String(count);
+  }
+
   /**
    * Build a compact reply preview element matching Twitter's native
    * reply preview structure beneath a tweet on timeline/profile view.
@@ -368,9 +591,7 @@ export default defineContentScript({
       btn.appendChild(makeSvgIcon(action.type));
       if (action.count > 0) {
         const countSpan = document.createElement('span');
-        countSpan.textContent = action.count >= 1000
-          ? (action.count / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
-          : String(action.count);
+        countSpan.textContent = formatMetric(action.count);
         btn.appendChild(countSpan);
       }
       actionRow.appendChild(btn);
@@ -384,6 +605,514 @@ export default defineContentScript({
     container.appendChild(rightCol);
 
     return container;
+  }
+
+  function replaceFirstMatchingSpan(
+    root: Element | null,
+    predicate: (text: string, span: HTMLSpanElement) => boolean,
+    value: string,
+  ): boolean {
+    if (!root) return false;
+    const spans = Array.from(root.querySelectorAll<HTMLSpanElement>('span'));
+    const match = spans.find(span => predicate((span.textContent ?? '').trim(), span));
+    if (!match) return false;
+    match.textContent = value;
+    return true;
+  }
+
+  function setMetricText(action: Element, count: number): void {
+    const transition = action.querySelector('[data-testid="app-text-transition-container"]');
+    if (!transition) return;
+
+    if (count <= 0) {
+      transition.remove();
+      return;
+    }
+
+    const metric = formatMetric(count);
+    const leaf = transition.querySelector<HTMLElement>('span > span') ??
+      Array.from(transition.querySelectorAll<HTMLElement>('span')).reverse()
+        .find(span => span.children.length === 0) ??
+      (transition instanceof HTMLElement ? transition : null);
+
+    if (leaf) leaf.textContent = metric;
+  }
+
+  function setActionMetric(root: Element, testId: string, count: number): void {
+    const action = root.querySelector(`[data-testid="${testId}"]`);
+    if (!action) return;
+    setMetricText(action, count);
+  }
+
+  function actionItemFor(row: Element, descendant: Element | null): HTMLElement | null {
+    if (!descendant) return null;
+
+    let item: Element | null = descendant;
+    while (item?.parentElement && item.parentElement !== row) {
+      item = item.parentElement;
+    }
+
+    return item instanceof HTMLElement ? item : null;
+  }
+
+  function findActionItem(row: Element | null, selector: string): HTMLElement | null {
+    if (!row) return null;
+    return actionItemFor(row, row.querySelector(selector));
+  }
+
+  function tintActionGray(action: Element): void {
+    if (action instanceof HTMLElement) {
+      setImportant(action, 'color', 'rgb(113, 118, 123)');
+    }
+
+    for (const child of action.querySelectorAll<HTMLElement>('*')) {
+      setImportant(child, 'color', 'rgb(113, 118, 123)');
+    }
+
+    const svg = action.querySelector<SVGSVGElement>('svg');
+    if (svg) {
+      svg.style.setProperty('color', 'rgb(113, 118, 123)', 'important');
+      svg.style.setProperty('fill', 'currentColor', 'important');
+    }
+  }
+
+  function resetLikeAction(root: Element, count: number): void {
+    const likedAction = root.querySelector('[data-testid="unlike"]');
+    const likeAction = root.querySelector('[data-testid="like"]');
+    const action = likedAction ?? likeAction;
+    if (!action) return;
+
+    action.setAttribute('data-testid', 'like');
+    action.setAttribute('aria-label', count > 0 ? `${formatMetric(count)} Likes` : 'Like');
+    action.removeAttribute('aria-pressed');
+
+    tintActionGray(action);
+
+    const svg = action.querySelector<SVGSVGElement>('svg');
+    if (svg) {
+      svg.innerHTML = '<g><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
+    }
+
+    setMetricText(action, count);
+  }
+
+  function normalizeBookmarkShareGap(root: Element): void {
+    const bookmarkSvg = root.querySelector<SVGSVGElement>(
+      '[data-testid="bookmark"] svg, [aria-label*="Bookmark"] svg',
+    );
+    bookmarkSvg?.style.setProperty('margin-right', '0.5rem', 'important');
+  }
+
+  function visibleActionItems(row: Element): HTMLElement[] {
+    return Array.from(row.children)
+      .filter((child): child is HTMLElement => child instanceof HTMLElement)
+      .filter((child) => {
+        const rect = child.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+  }
+
+  function alignActionRowToTemplate(root: Element, templateBoundary: Element): void {
+    const row = root.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    const templateRow = templateBoundary.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    if (!(row instanceof HTMLElement) || !(templateRow instanceof HTMLElement)) return;
+
+    const items = visibleActionItems(row);
+    const templateItems = visibleActionItems(templateRow);
+    if (items.length === 0 || items.length !== templateItems.length) return;
+
+    const templateRowRect = templateRow.getBoundingClientRect();
+    setImportant(row, 'position', 'relative');
+    setImportant(row, 'display', 'block');
+    setImportant(row, 'height', `${templateRowRect.height}px`);
+    setImportant(row, 'min-height', `${templateRowRect.height}px`);
+
+    items.forEach((item, index) => {
+      const templateRect = templateItems[index].getBoundingClientRect();
+      setImportant(item, 'position', 'absolute');
+      setImportant(item, 'top', `${templateRect.top - templateRowRect.top}px`);
+      setImportant(item, 'left', `${templateRect.left - templateRowRect.left}px`);
+      setImportant(item, 'width', `${templateRect.width}px`);
+      setImportant(item, 'height', `${templateRect.height}px`);
+      setImportant(item, 'margin', '0px');
+      setImportant(item, 'transform', 'none');
+      setImportant(item, 'translate', 'none');
+    });
+  }
+
+  function ensureBookmarkAction(root: Element, templateBoundary: Element): void {
+    const row = root.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    if (!row) return;
+
+    const existingBookmark = findActionItem(row, '[data-testid="bookmark"], [aria-label*="Bookmark"]');
+    if (existingBookmark) {
+      tintActionGray(existingBookmark);
+      normalizeBookmarkShareGap(root);
+      return;
+    }
+
+    const shareItem = findActionItem(
+      row,
+      '[data-testid="share"], [data-testid="send"], [aria-label*="Share"], [aria-label*="share"]',
+    ) ?? (row.lastElementChild instanceof HTMLElement ? row.lastElementChild : null);
+    if (!shareItem) return;
+
+    const templateRow = templateBoundary.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    const templateBookmark = findActionItem(
+      templateRow,
+      '[data-testid="bookmark"], [aria-label*="Bookmark"]',
+    );
+
+    const bookmarkItem = (templateBookmark ?? shareItem).cloneNode(true) as HTMLElement;
+    bookmarkItem.setAttribute('data-testid', 'bookmark');
+    bookmarkItem.setAttribute('aria-label', 'Bookmark');
+    bookmarkItem.removeAttribute('aria-pressed');
+
+    const transition = bookmarkItem.querySelector('[data-testid="app-text-transition-container"]');
+    transition?.remove();
+
+    const svg = bookmarkItem.querySelector<SVGSVGElement>('svg');
+    if (svg) {
+      svg.innerHTML = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g>';
+    }
+    tintActionGray(bookmarkItem);
+
+    row.insertBefore(bookmarkItem, shareItem);
+    normalizeBookmarkShareGap(root);
+  }
+
+  function isHeaderSvgRect(tweetRect: DOMRect, rect: DOMRect): boolean {
+    if (rect.width < 8 || rect.height < 8) return false;
+    if (rect.width > 36 || rect.height > 36) return false;
+    if (rect.top < tweetRect.top - 4 || rect.top > tweetRect.top + 48) return false;
+    if (rect.left < tweetRect.right - 128) return false;
+    if (rect.right > tweetRect.right + 4) return false;
+    return true;
+  }
+
+  function topRightHeaderSvgs(tweet: HTMLElement): SVGSVGElement[] {
+    const tweetRect = tweet.getBoundingClientRect();
+    const actionRow = tweet.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+
+    return Array.from(tweet.querySelectorAll<SVGSVGElement>('svg'))
+      .filter((svg) => {
+        if (actionRow?.contains(svg)) return false;
+        if (svg.closest(PT_SELECTORS.TWEET_AVATAR)) return false;
+        if (svg.closest('[data-pt-header-controls="true"]')) return false;
+        return isHeaderSvgRect(tweetRect, svg.getBoundingClientRect());
+      })
+      .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)
+      .slice(-2);
+  }
+
+  function unionRects(rects: readonly DOMRect[]): DOMRect | null {
+    if (rects.length === 0) return null;
+    const left = Math.min(...rects.map(rect => rect.left));
+    const top = Math.min(...rects.map(rect => rect.top));
+    const right = Math.max(...rects.map(rect => rect.right));
+    const bottom = Math.max(...rects.map(rect => rect.bottom));
+    return new DOMRect(left, top, right - left, bottom - top);
+  }
+
+  function ensureHeaderControls(root: Element, templateBoundary: Element): void {
+    const cloneTweet = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
+    const templateTweet = templateBoundary.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
+    if (!cloneTweet || !templateTweet) return;
+
+    const sourceSvgs = topRightHeaderSvgs(templateTweet);
+    if (sourceSvgs.length === 0) return;
+
+    const sourceRects = sourceSvgs.map(svg => svg.getBoundingClientRect());
+    const controlsRect = unionRects(sourceRects);
+    if (!controlsRect) return;
+
+    root.querySelectorAll('[data-pt-header-controls="true"]').forEach(el => el.remove());
+
+    const templateTweetRect = templateTweet.getBoundingClientRect();
+    const overlay = document.createElement('div');
+    overlay.dataset.ptHeaderControls = 'true';
+    setImportant(overlay, 'position', 'absolute');
+    setImportant(overlay, 'top', `${controlsRect.top - templateTweetRect.top}px`);
+    setImportant(overlay, 'right', `${templateTweetRect.right - controlsRect.right}px`);
+    setImportant(overlay, 'width', `${controlsRect.width}px`);
+    setImportant(overlay, 'height', `${controlsRect.height}px`);
+    setImportant(overlay, 'color', 'rgb(113, 118, 123)');
+    setImportant(overlay, 'z-index', '2');
+    setImportant(overlay, 'pointer-events', 'none');
+
+    sourceSvgs.forEach((svg, index) => {
+      const sourceRect = sourceRects[index];
+      const slot = document.createElement('div');
+      slot.setAttribute('aria-hidden', 'true');
+      setImportant(slot, 'position', 'absolute');
+      setImportant(slot, 'left', `${sourceRect.left - controlsRect.left}px`);
+      setImportant(slot, 'top', `${sourceRect.top - controlsRect.top}px`);
+      setImportant(slot, 'width', `${sourceRect.width}px`);
+      setImportant(slot, 'height', `${sourceRect.height}px`);
+      setImportant(slot, 'color', 'rgb(113, 118, 123)');
+
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.removeAttribute('id');
+      clone.style.setProperty('display', 'block', 'important');
+      clone.style.setProperty('width', `${sourceRect.width}px`, 'important');
+      clone.style.setProperty('height', `${sourceRect.height}px`, 'important');
+      clone.style.setProperty('color', 'rgb(113, 118, 123)', 'important');
+
+      for (const child of clone.querySelectorAll<SVGElement>('*')) {
+        child.style.setProperty('color', 'rgb(113, 118, 123)', 'important');
+        if (child.getAttribute('fill') !== 'none') child.setAttribute('fill', 'currentColor');
+      }
+
+      slot.appendChild(clone);
+      overlay.appendChild(slot);
+    });
+
+    setImportant(cloneTweet, 'position', 'relative');
+    cloneTweet.appendChild(overlay);
+  }
+
+  function neutralizeInteractiveElements(root: HTMLElement): void {
+    for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+      anchor.href = '#';
+      anchor.removeAttribute('target');
+      anchor.setAttribute('tabindex', '-1');
+      anchor.addEventListener('click', event => event.preventDefault());
+    }
+
+    for (const button of root.querySelectorAll<HTMLElement>('button, [role="button"]')) {
+      button.setAttribute('tabindex', '-1');
+      button.addEventListener('click', event => event.preventDefault());
+    }
+  }
+
+  /**
+   * Build a fake thread reply by cloning a real reply cell currently rendered by
+   * Twitter/X, then replacing only the content. This lets Twitter's own classes,
+   * spacing, borders, typography, icon sizing, and theme styles remain the source
+   * of truth for status-page replies.
+   */
+  function setImportant(el: HTMLElement, property: string, value: string): void {
+    el.style.setProperty(property, value, 'important');
+  }
+
+  function setAbsoluteVirtualLayout(el: HTMLElement, top: number, width: number): void {
+    setImportant(el, 'position', 'absolute');
+    setImportant(el, 'top', `${top}px`);
+    setImportant(el, 'right', 'auto');
+    setImportant(el, 'bottom', 'auto');
+    setImportant(el, 'left', '0px');
+    setImportant(el, 'width', `${width}px`);
+    setImportant(el, 'transform', 'translateY(0px)');
+    setImportant(el, 'translate', 'none');
+    setImportant(el, 'opacity', '1');
+    setImportant(el, 'visibility', 'visible');
+    setImportant(el, 'background-color', getPageBg());
+  }
+
+  function prepareThreadCloneLayout(clone: HTMLElement, top: number, width: number): void {
+    setAbsoluteVirtualLayout(clone, top, width);
+    setImportant(clone, 'z-index', '1');
+
+    const tweet = clone.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
+    let el = tweet?.parentElement ?? null;
+    while (el && el !== clone) {
+      setImportant(el, 'position', 'relative');
+      setImportant(el, 'top', '0px');
+      setImportant(el, 'left', '0px');
+      setImportant(el, 'right', 'auto');
+      setImportant(el, 'bottom', 'auto');
+      setImportant(el, 'transform', 'none');
+      setImportant(el, 'translate', 'none');
+      setImportant(el, 'opacity', '1');
+      setImportant(el, 'visibility', 'visible');
+      el = el.parentElement;
+    }
+  }
+
+  function getTranslateY(el: HTMLElement): number {
+    const inlineTransform = el.style.transform;
+    const inlineMatch = inlineTransform.match(/translateY\((-?\d+(?:\.\d+)?)px\)/);
+    if (inlineMatch) return Number(inlineMatch[1]);
+
+    const computedTransform = window.getComputedStyle(el).transform;
+    if (!computedTransform || computedTransform === 'none') return 0;
+
+    const matrixMatch = computedTransform.match(/^matrix\(([^)]+)\)$/);
+    if (matrixMatch) {
+      const parts = matrixMatch[1].split(',').map(part => Number(part.trim()));
+      return Number.isFinite(parts[5]) ? parts[5] : 0;
+    }
+
+    return 0;
+  }
+
+  function getVisualTop(el: Element, parentRect: DOMRect): number {
+    return el.getBoundingClientRect().top - parentRect.top;
+  }
+
+  function getVirtualTop(el: HTMLElement, parentRect: DOMRect): number {
+    return getVisualTop(el, parentRect) - getTranslateY(el);
+  }
+
+  function setVirtualTopPreservingTransform(el: HTMLElement, top: number, width: number): void {
+    setImportant(el, 'position', 'absolute');
+    setImportant(el, 'top', `${top}px`);
+    setImportant(el, 'right', 'auto');
+    setImportant(el, 'bottom', 'auto');
+    setImportant(el, 'left', '0px');
+    setImportant(el, 'width', `${width}px`);
+    setImportant(el, 'opacity', '1');
+    setImportant(el, 'visibility', 'visible');
+    setImportant(el, 'background-color', getPageBg());
+  }
+
+  function captureShiftedSibling(el: Element, parentRect: DOMRect): ShiftedSibling | null {
+    if (!(el instanceof HTMLElement)) return null;
+    const rect = el.getBoundingClientRect();
+    return {
+      el,
+      virtualTop: getVirtualTop(el, parentRect),
+      visualTop: getVisualTop(el, parentRect),
+      height: rect.height,
+      originalStyle: el.getAttribute('style'),
+    };
+  }
+
+  function layoutThreadInjection(entry: ThreadInjection): void {
+    if (!document.contains(entry.parent) || !document.contains(entry.cell)) {
+      threadInjections.delete(entry.tweetId);
+      return;
+    }
+
+    const parentRect = entry.parent.getBoundingClientRect();
+    const cellRect = entry.cell.getBoundingClientRect();
+    const startTop = cellRect.bottom - parentRect.top;
+    let fakeTop = startTop;
+
+    for (const fake of entry.fakes) {
+      if (!document.contains(fake)) continue;
+      setAbsoluteVirtualLayout(fake, fakeTop, parentRect.width);
+      fakeTop += fake.getBoundingClientRect().height || entry.itemHeight;
+    }
+
+    const totalAddedHeight = fakeTop - startTop;
+
+    let requiredBottom = fakeTop;
+    for (const sibling of entry.shiftedSiblings) {
+      if (!document.contains(sibling.el)) continue;
+
+      // Let Twitter/X keep owning native virtual-list placement via transform.
+      // We only add the height occupied by our fake block as a stable top offset.
+      // If the reply composer expands, X updates the real replies' transforms;
+      // adding startTop again here would double-count that movement and create a
+      // growing gap above the first real reply.
+      setVirtualTopPreservingTransform(
+        sibling.el,
+        sibling.virtualTop + totalAddedHeight,
+        parentRect.width,
+      );
+      sibling.el.dataset.ptShifted = 'true';
+
+      const rect = sibling.el.getBoundingClientRect();
+      requiredBottom = Math.max(requiredBottom, rect.bottom - parentRect.top);
+    }
+
+    const minHeight = Math.max(entry.originalParentHeight, requiredBottom);
+    setImportant(entry.parent, 'min-height', `${minHeight}px`);
+  }
+
+  function layoutThreadInjections(): void {
+    threadLayoutRafId = null;
+    for (const entry of threadInjections.values()) {
+      layoutThreadInjection(entry);
+    }
+  }
+
+  function clearThreadInjections(): void {
+    for (const entry of threadInjections.values()) {
+      for (const fake of entry.fakes) fake.remove();
+      for (const sibling of entry.shiftedSiblings) {
+        if (sibling.originalStyle === null) {
+          sibling.el.removeAttribute('style');
+        } else {
+          sibling.el.setAttribute('style', sibling.originalStyle);
+        }
+        delete sibling.el.dataset.ptShifted;
+      }
+      entry.parent.style.minHeight = entry.originalParentMinHeight;
+    }
+    threadInjections.clear();
+  }
+
+  function scheduleThreadRelayout(): void {
+    if (threadLayoutRafId === null) {
+      threadLayoutRafId = ctx.requestAnimationFrame(layoutThreadInjections);
+    }
+  }
+
+  function getThreadResizeObserver(): ResizeObserver | null {
+    if (!('ResizeObserver' in window)) return null;
+    if (!threadResizeObserver) {
+      threadResizeObserver = new ResizeObserver(scheduleThreadRelayout);
+    }
+    return threadResizeObserver;
+  }
+
+  function buildThreadReplyFromTemplate(
+    reply: GeneratedReply,
+    templateBoundary: Element,
+    parentTweetId: string,
+  ): HTMLElement {
+    const clone = templateBoundary.cloneNode(true) as HTMLElement;
+    clone.classList.add('pt-reply-container');
+    clone.setAttribute('data-pt-parent-tweet', parentTweetId);
+    clone.setAttribute('data-pt-fake-reply', 'true');
+    clone.setAttribute('aria-hidden', 'true');
+
+    const tweet = clone.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
+    tweet?.removeAttribute(PT_SELECTORS.MARKER_ATTR);
+    tweet?.setAttribute('data-pt-fake-reply', 'true');
+
+    const avatar = clone.querySelector<HTMLImageElement>(`${PT_SELECTORS.TWEET_AVATAR} img, img[src], img`);
+    if (avatar) {
+      avatar.src = reply.avatar;
+      avatar.srcset = '';
+      avatar.alt = '';
+    }
+
+    const author = clone.querySelector(PT_SELECTORS.TWEET_AUTHOR);
+    replaceFirstMatchingSpan(
+      author,
+      text => text.length > 0 && !text.startsWith('@') && text !== '·',
+      reply.displayName,
+    );
+    replaceFirstMatchingSpan(author, text => text.startsWith('@'), reply.handle);
+
+    const time = clone.querySelector('time');
+    if (time) {
+      time.textContent = reply.timestamp;
+      time.removeAttribute('datetime');
+    }
+
+    if (!reply.verified) {
+      const verifiedIcon = author?.querySelector('[aria-label*="Verified"], [data-testid="icon-verified"]');
+      const removable = verifiedIcon?.closest('span, div');
+      removable?.remove();
+    }
+
+    const text = clone.querySelector(PT_SELECTORS.TWEET_TEXT);
+    if (text) text.textContent = reply.text;
+
+    setActionMetric(clone, 'reply', reply.metrics.replies);
+    setActionMetric(clone, 'retweet', reply.metrics.retweets);
+    resetLikeAction(clone, reply.metrics.likes);
+    ensureBookmarkAction(clone, templateBoundary);
+    alignActionRowToTemplate(clone, templateBoundary);
+    ensureHeaderControls(clone, templateBoundary);
+
+    neutralizeInteractiveElements(clone);
+
+    return clone;
   }
 
   /**
@@ -474,20 +1203,109 @@ export default defineContentScript({
     return cell || article.parentElement;
   }
 
+  function getFocalTweetId(): string | null {
+    return window.location.pathname.match(/\/status\/(\d+)/)?.[1] ?? null;
+  }
+
+  function findFirstThreadReplyBoundaryAfter(cellDiv: Element, focalTweetId: string): Element | null {
+    let candidate = cellDiv.nextElementSibling;
+    while (candidate) {
+      if (candidate instanceof HTMLElement && candidate.dataset.ptFakeReply === 'true') {
+        candidate = candidate.nextElementSibling;
+        continue;
+      }
+
+      const tweet = candidate.querySelector(PT_SELECTORS.TWEET_CELL);
+      if (tweet && extractTweetId(tweet) !== focalTweetId) return candidate;
+      candidate = candidate.nextElementSibling;
+    }
+    return null;
+  }
+
+  function hasInjectedRepliesFor(parent: Element, tweetId: string): boolean {
+    return parent.querySelector(`[data-pt-parent-tweet="${tweetId}"]`) !== null;
+  }
+
+  function injectFocalThreadReplies(
+    tweetId: string,
+    cellDiv: Element,
+    replies: readonly GeneratedReply[],
+  ): boolean {
+    const parent = cellDiv.parentElement;
+    if (!parent) return false;
+    if (hasInjectedRepliesFor(parent, tweetId)) return true;
+
+    const templateBoundary = findFirstThreadReplyBoundaryAfter(cellDiv, tweetId);
+    if (!templateBoundary) {
+      // Wait for at least one real reply to render. We clone it as the visual
+      // template so fake replies match the live Twitter/X UI exactly.
+      return false;
+    }
+
+    if (!(parent instanceof HTMLElement)) return false;
+
+    const parentRect = parent.getBoundingClientRect();
+    const templateRect = templateBoundary.getBoundingClientRect();
+    const itemHeight = Math.max(1, templateRect.height);
+    const children = Array.from(parent.children);
+    const templateIndex = children.indexOf(templateBoundary);
+    const siblingsToShift = templateIndex === -1 ? [] : children.slice(templateIndex);
+    const shiftedSiblings = siblingsToShift
+      .map(child => captureShiftedSibling(child, parentRect))
+      .filter((sibling): sibling is ShiftedSibling => sibling !== null);
+    const fakes: HTMLElement[] = [];
+
+    replies.forEach((reply, index) => {
+      const fake = buildThreadReplyFromTemplate(reply, templateBoundary, tweetId);
+      prepareThreadCloneLayout(fake, 0 + itemHeight * index, parentRect.width);
+      fakes.push(fake);
+      parent.insertBefore(fake, templateBoundary);
+    });
+
+    const entry: ThreadInjection = {
+      tweetId,
+      parent,
+      cell: cellDiv,
+      fakes,
+      shiftedSiblings,
+      itemHeight,
+      originalParentMinHeight: parent.style.minHeight,
+      originalParentHeight: parentRect.height,
+    };
+    threadInjections.set(tweetId, entry);
+
+    const resizeObserver = getThreadResizeObserver();
+    resizeObserver?.observe(parent);
+    if (cellDiv instanceof Element) resizeObserver?.observe(cellDiv);
+
+    layoutThreadInjection(entry);
+
+    return true;
+  }
+
   function injectReplies(tweetEl: Element): void {
-    const tweetId = extractTweetId(tweetEl);
-    if (!tweetId) return;
+    const tweetId = extractTweetId(tweetEl) ?? (isThreadView() ? getFocalTweetId() : null);
+    if (!tweetId) {
+      debug('skip: matching user tweet but no tweet id found');
+      return;
+    }
 
     // Find the cell boundary first so we can check for existing injected content.
     const article = tweetEl.closest('article') || tweetEl;
     const cellDiv = findCellBoundary(article);
 
-    // Deduplicate: check vsMap (virtual scroll path) and next sibling (normal flow path)
+    // Deduplicate: check vsMap (virtual scroll path), explicit parent marker
+    // (thread clone path), and next sibling (normal flow path).
     if (vsMap.has(tweetId)) {
       tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
       return;
     }
     if (cellDiv) {
+      if (cellDiv.parentElement && hasInjectedRepliesFor(cellDiv.parentElement, tweetId)) {
+        tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
+        return;
+      }
+
       const nextEl = cellDiv.nextElementSibling;
       if (nextEl && nextEl.classList.contains('pt-reply-container')) {
         tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
@@ -497,6 +1315,20 @@ export default defineContentScript({
 
     const count = getReplyCount();
     const replies = PT_YAPPER.generateReplies(tweetId, count);
+    const focalTweetId = getFocalTweetId();
+
+    if (cellDiv && isThreadView() && focalTweetId === tweetId) {
+      if (!injectFocalThreadReplies(tweetId, cellDiv, replies)) {
+          debug(`waiting for real reply template\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
+        scheduleQaReport('waiting for real reply template');
+        return;
+      }
+      inflateReplyCount(tweetEl, count);
+      tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
+      debug(`injected focal thread replies\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
+      scheduleQaReport('injected focal thread replies');
+      return;
+    }
 
     // Detect virtual-scroll context by walking up from the tweet element itself.
     // Checking cellDiv.position is unreliable — findCellBoundary sometimes returns
@@ -505,12 +1337,12 @@ export default defineContentScript({
 
     const replyContainer = buildReplyContainer(replies);
     replyContainer.setAttribute('data-pt-tweet', tweetId);
+    replyContainer.setAttribute('data-pt-parent-tweet', tweetId);
 
     if (cellDiv && (isThreadView() || inVirtualScroll)) {
-      // Thread view: use vsOverlay to avoid inflating scroll height, which would
-      // prevent Twitter's load-more sentinel from ever firing (only the initial
-      // ~3 replies would be visible). Profile-page virtual scroll: same overlay,
-      // different reason — React re-renders reset positions inside its tree.
+      // Non-focal thread tweets and virtual-scroll profile pages use vsOverlay to
+      // avoid fighting Twitter/X React layout. The focal status tweet uses cloned
+      // real reply cells in normal flow above, so it can look native in-thread.
       const rect = cellDiv.getBoundingClientRect();
       replyContainer.style.cssText =
         'position:absolute;pointer-events:auto;' +
@@ -531,12 +1363,18 @@ export default defineContentScript({
 
     // Mark as processed
     tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
+    debug(`injected reply previews\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
+    scheduleQaReport('injected reply previews');
   }
 
   // ── Observer ─────────────────────────────────────────────────────
 
   function processTweets(): void {
-    if (!isActive || !userHandle) return;
+    if (!isActive || !userHandle) {
+      debug(`inactive\nhandle=${userHandle || '(empty)'}\nactive=${isActive}`);
+      scheduleQaReport('inactive');
+      return;
+    }
 
     // SPA navigation: nuke stale VS overlay entries immediately when URL changes.
     // scheduleVsUpdate() fires too late (cells still in DOM when rAF runs).
@@ -545,15 +1383,24 @@ export default defineContentScript({
       lastUrl = currentUrl;
       for (const [, entry] of vsMap) entry.container.remove();
       vsMap.clear();
+      clearThreadInjections();
     }
 
     const tweets = document.querySelectorAll(PT_SELECTORS.TWEET_CELL);
+    let userTweetCount = 0;
+    let markedTweetCount = 0;
     for (const tweet of tweets) {
+      const isMine = isUserTweet(tweet);
+      if (isMine) userTweetCount += 1;
+
       // Skip already-processed tweets
-      if (tweet.hasAttribute(PT_SELECTORS.MARKER_ATTR)) continue;
+      if (tweet.hasAttribute(PT_SELECTORS.MARKER_ATTR)) {
+        if (isMine) markedTweetCount += 1;
+        continue;
+      }
 
       // Only process the user's own tweets
-      if (!isUserTweet(tweet)) continue;
+      if (!isMine) continue;
 
       // Skip quoted tweets (user's tweet embedded inside someone else's tweet)
       if (isQuotedTweet(tweet)) continue;
@@ -561,17 +1408,11 @@ export default defineContentScript({
       // Skip thread continuations (only inject on the last tweet in a thread)
       if (isThreadContinuation(tweet)) continue;
 
-      // On a status page the focal tweet (ID == URL's /status/<id>) is in an
-      // expanded layout; inserting fake replies directly after it causes overlap
-      // with the tweet card's own section. Skip it — self-replies in the thread
-      // (different IDs) are still processed normally.
-      if (isThreadView()) {
-        const focalId = window.location.pathname.match(/\/status\/(\d+)/)?.[1];
-        if (focalId && extractTweetId(tweet) === focalId) continue;
-      }
-
       injectReplies(tweet);
     }
+
+    debug(`processed tweets\nhandle=${userHandle}\nactive=${isActive}\nscanned=${tweets.length}\nuserTweets=${userTweetCount}\nmarked=${markedTweetCount}\nurl=${location.pathname}`);
+    scheduleQaReport('processed tweets');
   }
 
   let observer: MutationObserver | null = null;
@@ -599,6 +1440,7 @@ export default defineContentScript({
       // Reposition/cull VS overlay entries on every DOM change so stale
       // profile-page containers don't linger after SPA navigation.
       scheduleVsUpdate();
+      scheduleThreadRelayout();
       processTweets();
     });
 
@@ -613,6 +1455,10 @@ export default defineContentScript({
     // Clean up fixed overlay and its entries
     if (vsOverlay) { vsOverlay.remove(); vsOverlay = null; }
     vsMap.clear();
+    clearThreadInjections();
+    threadResizeObserver?.disconnect();
+    threadResizeObserver = null;
+    if (threadLayoutRafId !== null) { cancelAnimationFrame(threadLayoutRafId); threadLayoutRafId = null; }
     if (vsRafId !== null) { cancelAnimationFrame(vsRafId); vsRafId = null; }
     if (observer) {
       observer.disconnect();
