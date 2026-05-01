@@ -1044,6 +1044,22 @@ export default defineContentScript({
     threadInjections.clear();
   }
 
+  function clearInjectedArtifacts(): void {
+    clearThreadInjections();
+
+    for (const [, entry] of vsMap) entry.container.remove();
+    vsMap.clear();
+
+    vsOverlay?.remove();
+    vsOverlay = null;
+    document.getElementById('pt-vs-overlay')?.remove();
+
+    document.querySelectorAll<HTMLElement>('.pt-reply-container, [data-pt-fake-reply="true"]').forEach(el => el.remove());
+    document.querySelectorAll(`${PT_SELECTORS.TWEET_CELL}[${PT_SELECTORS.MARKER_ATTR}]`).forEach(tweet => {
+      tweet.removeAttribute(PT_SELECTORS.MARKER_ATTR);
+    });
+  }
+
   function scheduleThreadRelayout(): void {
     if (threadLayoutRafId === null) {
       threadLayoutRafId = ctx.requestAnimationFrame(layoutThreadInjections);
@@ -1313,58 +1329,22 @@ export default defineContentScript({
       }
     }
 
+    const focalTweetId = getFocalTweetId();
+    if (!cellDiv || !isThreadView() || focalTweetId !== tweetId) return;
+
     const count = getReplyCount();
     const replies = PT_YAPPER.generateReplies(tweetId, count);
-    const focalTweetId = getFocalTweetId();
 
-    if (cellDiv && isThreadView() && focalTweetId === tweetId) {
-      if (!injectFocalThreadReplies(tweetId, cellDiv, replies)) {
-          debug(`waiting for real reply template\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
-        scheduleQaReport('waiting for real reply template');
-        return;
-      }
-      inflateReplyCount(tweetEl, count);
-      tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
-      debug(`injected focal thread replies\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
-      scheduleQaReport('injected focal thread replies');
+    if (!injectFocalThreadReplies(tweetId, cellDiv, replies)) {
+      debug(`waiting for real reply template\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
+      scheduleQaReport('waiting for real reply template');
       return;
     }
 
-    // Detect virtual-scroll context by walking up from the tweet element itself.
-    // Checking cellDiv.position is unreliable — findCellBoundary sometimes returns
-    // a static-position intermediate wrapper instead of the absolute outer shell.
-    const inVirtualScroll = isInVirtualScroll(tweetEl);
-
-    const replyContainer = buildReplyContainer(replies);
-    replyContainer.setAttribute('data-pt-tweet', tweetId);
-    replyContainer.setAttribute('data-pt-parent-tweet', tweetId);
-
-    if (cellDiv && (isThreadView() || inVirtualScroll)) {
-      // Non-focal thread tweets and virtual-scroll profile pages use vsOverlay to
-      // avoid fighting Twitter/X React layout. The focal status tweet uses cloned
-      // real reply cells in normal flow above, so it can look native in-thread.
-      const rect = cellDiv.getBoundingClientRect();
-      replyContainer.style.cssText =
-        'position:absolute;pointer-events:auto;' +
-        'background-color:' + getPageBg() + ';' +
-        'border-bottom:1px solid rgb(47,51,54);' +
-        'top:' + rect.bottom + 'px;' +
-        'left:' + rect.left + 'px;' +
-        'width:' + rect.width + 'px;';
-      getVsOverlay().appendChild(replyContainer);
-      vsMap.set(tweetId, { cell: cellDiv, container: replyContainer });
-    } else if (cellDiv && cellDiv.parentElement) {
-      // Normal flow (timeline): insert directly after the cell.
-      cellDiv.parentElement.insertBefore(replyContainer, cellDiv.nextSibling);
-    }
-
-    // Inflate the reply count
     inflateReplyCount(tweetEl, count);
-
-    // Mark as processed
     tweetEl.setAttribute(PT_SELECTORS.MARKER_ATTR, 'true');
-    debug(`injected reply previews\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
-    scheduleQaReport('injected reply previews');
+    debug(`injected focal thread replies\nhandle=${userHandle}\ntweet=${tweetId}\ncount=${count}`);
+    scheduleQaReport('injected focal thread replies');
   }
 
   // ── Observer ─────────────────────────────────────────────────────
@@ -1376,14 +1356,20 @@ export default defineContentScript({
       return;
     }
 
-    // SPA navigation: nuke stale VS overlay entries immediately when URL changes.
-    // scheduleVsUpdate() fires too late (cells still in DOM when rAF runs).
+    // SPA navigation: clear any previously injected profile/thread artifacts.
     const currentUrl = location.href;
     if (currentUrl !== lastUrl) {
       lastUrl = currentUrl;
-      for (const [, entry] of vsMap) entry.container.remove();
-      vsMap.clear();
-      clearThreadInjections();
+      clearInjectedArtifacts();
+    }
+
+    // Only inject full fake replies on a tweet detail page. Profile/timeline
+    // pages should show Twitter/X's native cards only.
+    if (!isThreadView() || !getFocalTweetId()) {
+      clearInjectedArtifacts();
+      debug(`skipping non-status page\nhandle=${userHandle}\nurl=${location.pathname}`);
+      scheduleQaReport('skipping non-status page');
+      return;
     }
 
     const tweets = document.querySelectorAll(PT_SELECTORS.TWEET_CELL);
@@ -1455,7 +1441,7 @@ export default defineContentScript({
     // Clean up fixed overlay and its entries
     if (vsOverlay) { vsOverlay.remove(); vsOverlay = null; }
     vsMap.clear();
-    clearThreadInjections();
+    clearInjectedArtifacts();
     threadResizeObserver?.disconnect();
     threadResizeObserver = null;
     if (threadLayoutRafId !== null) { cancelAnimationFrame(threadLayoutRafId); threadLayoutRafId = null; }
