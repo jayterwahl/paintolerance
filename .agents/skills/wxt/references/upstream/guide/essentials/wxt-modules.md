@@ -1,0 +1,358 @@
+<!--
+Source: https://wxt.dev/guide/essentials/wxt-modules.md
+Vendored from https://wxt.dev/llms-full.txt on 2026-04-30.
+-->
+
+# WXT Modules
+
+WXT provides a "module system" that lets you run code at different steps in the build process to modify it.
+
+\[\[toc]]
+
+## Installing a Module
+
+To use a published module from NPM, install the package and add it to your config:
+
+```ts [wxt.config.ts]
+export default defineConfig({
+  modules: ['@wxt-dev/auto-icons'],
+});
+```
+
+> Searching for ["wxt module"](https://www.npmjs.com/search?q=wxt%20module) on NPM is a good way to find published WXT modules.
+
+## Module Options
+
+WXT modules may require or allow setting custom options to change their behavior. There are two types of options:
+
+1. **Build-time**: Any config used during the build process, like feature flags
+2. **Runtime**: Any config accessed at runtime, like callback functions
+
+Build-time options are placed in your `wxt.config.ts`, while runtime options is placed in the [`app.config.ts` file](/guide/essentials/config/runtime). Refer to each module's documentation about what options are required and where they should be placed.
+
+If you use TypeScript, modules augment WXT's types so you will get type errors if options are missing or incorrect.
+
+## Execution Order
+
+Modules are loaded in the same order as hooks are executed. Refer to the [Hooks documentation](/guide/essentials/config/hooks#execution-order) for more details.
+
+## Writing Modules
+
+If you need custom build logic for your project, you can write your own local module. Here's what a basic WXT module looks like:
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+
+export default defineWxtModule({
+  setup(wxt) {
+    // Your module code here...
+  },
+});
+```
+
+To add it to your project, place the file in the `modules/` directory at the root of your project. Any module file in this directory is **automatically discovered and loaded** — no additional configuration is needed:
+
+```plaintext
+<rootDir>/
+  modules/
+    my-module.ts    ← loaded automatically
+```
+
+Each module's setup function is executed after the `wxt.config.ts` file is loaded. The `wxt` object provides everything you need to write a module:
+
+* Use `wxt.hook(...)` to hook into the build's lifecycle and make changes
+* Use `wxt.config` to get the resolved config from the project's `wxt.config.ts` file
+* Use `wxt.logger` to log messages to the console
+* and more!
+
+Refer to the [API reference](/api/reference/wxt/interfaces/Wxt) for a complete list of properties and functions available.
+
+Also make sure to read about [all the hooks that are available](/api/reference/wxt/interfaces/WxtHooks) - they are essential to writing modules.
+
+### Recipes
+
+Modules are complex and require a deeper understanding of WXT's code and how it works. The best way to learn is by example.
+
+#### Update resolved config
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+
+export default defineWxtModule({
+  setup(wxt) {
+    wxt.hook('config:resolved', () => {
+      wxt.config.outDir = 'dist';
+    });
+  },
+});
+```
+
+#### Add built-time config
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+import 'wxt';
+
+export interface MyModuleOptions {
+  // Add your build-time options here...
+}
+declare module 'wxt' {
+  export interface InlineConfig {
+    // Add types for the "myModule" key in wxt.config.ts
+    myModule: MyModuleOptions;
+  }
+}
+
+export default defineWxtModule<AnalyticModuleOptions>({
+  configKey: 'myModule',
+
+  // Build time config is available via the second argument of setup
+  setup(wxt, options) {
+    console.log(options);
+  },
+});
+```
+
+#### Add runtime config
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+import 'wxt/utils/define-app-config';
+
+export interface MyModuleRuntimeOptions {
+  // Add your runtime options here...
+}
+declare module 'wxt/utils/define-app-config' {
+  export interface WxtAppConfig {
+    myModule: MyModuleOptions;
+  }
+}
+```
+
+Runtime options are returned when calling
+
+```ts
+const config = getAppConfig();
+console.log(config.myModule);
+```
+
+This is very useful when [generating runtime code](#generate-runtime-module).
+
+#### Logging
+
+There are two "correct" ways to add console logs to your modules:
+
+1. Use `wxt.logger` for info, warnings, and errors
+2. Install [`obug`](https://www.npmjs.com/package/obug) for debug messages
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+import { createDebug } from 'obug';
+
+const debug = createDebug('my-module');
+
+export default defineWxtModule({
+  setup(wxt) {
+    wxt.logger.info('Module loaded');
+    debug('Debug details');
+  },
+});
+```
+
+`wxt.logger` is great for formatted, pretty messages that match the rest of WXT's logs.
+
+`obug` makes it easy for devs to enable and filter debug logs when necessary:
+
+```sh
+DEBUG=my-module wxt dev
+```
+
+#### Add custom entrypoint options
+
+Modules can add custom options to entrypoints by augmenting the entrypoint options types. This allows you to add custom configuration that can be accessed during the build process.
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+import 'wxt';
+
+declare module 'wxt' {
+  export interface BackgroundEntrypointOptions {
+    // Add custom options to the background entrypoint
+    myCustomOption?: string;
+  }
+}
+
+export default defineWxtModule({
+  setup(wxt) {
+    wxt.hook('entrypoints:resolved', (_, entrypoints) => {
+      const background = entrypoints.find((e) => e.type === 'background');
+      if (background) {
+        console.log('Custom option:', background.options.myCustomOption);
+      }
+    });
+  },
+});
+```
+
+Now users can set the custom option in their entrypoint:
+
+```ts [entrypoints/background.ts]
+export default defineBackground({
+  myCustomOption: 'custom value',
+  main() {
+    // ...
+  },
+});
+```
+
+This works for all other JS and HTML entrypoints, here's an example of how to pass a custom option from an HTML file.
+
+```html [entrypoints/popup.html]
+<html>
+  <head>
+    <meta name="wxt.myHtmlOption" content="custom value" />
+    <title>Popup</title>
+  </head>
+  <body>
+    <!-- ... -->
+  </body>
+</html>
+```
+
+#### Generate output file
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+
+export default defineWxtModule({
+  setup(wxt) {
+    // Relative to the output directory
+    const generatedFilePath = 'some-file.txt';
+
+    wxt.hook('build:publicAssets', (_, assets) => {
+      assets.push({
+        relativeDest: generatedFilePath,
+        contents: 'some generated text',
+      });
+    });
+
+    wxt.hook('build:manifestGenerated', (_, manifest) => {
+      manifest.web_accessible_resources ??= [];
+      manifest.web_accessible_resources.push({
+        matches: ['*://*'],
+        resources: [generatedFilePath],
+      });
+    });
+  },
+});
+```
+
+This file could then be loaded at runtime:
+
+```ts
+const res = await fetch(browser.runtime.getURL('/some-text.txt'));
+```
+
+#### Add custom entrypoints
+
+Once the existing files under the `entrypoints/` directory have been discovered, the `entrypoints:found` hook can be used to add custom entrypoints.
+
+:::info
+The `entrypoints:found` hook is triggered before validation is carried out on the list of entrypoints. Thus, any custom entrypoints will still be checked for duplicate names and logged during debugging.
+:::
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+
+export default defineWxtModule({
+  setup(wxt) {
+    wxt.hook('entrypoints:found', (_, entrypointInfos) => {
+      // Add your new entrypoint
+      entrypointInfos.push({
+        name: 'my-custom-script',
+        inputPath: 'path/to/custom-script.js',
+        type: 'content-script',
+      });
+    });
+  },
+});
+```
+
+#### Generate runtime module
+
+Create a file in `.wxt`, add an alias to import it, and add auto-imports for exported variables.
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+import { resolve } from 'node:path';
+
+export default defineWxtModule({
+  imports: [
+    // Add auto-imports
+    { from: '#analytics', name: 'analytics' },
+    { from: '#analytics', name: 'reportEvent' },
+    { from: '#analytics', name: 'reportPageView' },
+  ],
+
+  setup(wxt) {
+    const analyticsModulePath = resolve(
+      wxt.config.wxtDir,
+      'analytics/index.ts',
+    );
+    const analyticsModuleCode = `
+      import { createAnalytics } from 'some-module';
+
+      export const analytics = createAnalytics(getAppConfig().analytics);
+      export const { reportEvent, reportPageView } = analytics;
+    `;
+
+    addAlias(wxt, '#analytics', analyticsModulePath);
+
+    wxt.hook('prepare:types', async (_, entries) => {
+      entries.push({
+        path: analyticsModulePath,
+        text: analyticsModuleCode,
+      });
+    });
+  },
+});
+```
+
+#### Generate declaration file
+
+```ts
+import { defineWxtModule } from 'wxt/modules';
+import { resolve } from 'node:path';
+
+export default defineWxtModule({
+  setup(wxt) {
+    const typesPath = resolve(wxt.config.wxtDir, 'my-module/types.d.ts');
+    const typesCode = `
+      // Declare global types, perform type augmentation
+    `;
+
+    wxt.hook('prepare:types', async (_, entries) => {
+      entries.push({
+        path: 'my-module/types.d.ts',
+        text: `
+          // Declare global types, perform type augmentation, etc
+        `,
+        // IMPORTANT - without this line your declaration file will not be a part of the TS project:
+        tsReference: true,
+      });
+    });
+  },
+});
+```
+
+### Example Modules
+
+You should also look through the code of modules other people have written and published. Here's some examples:
+
+* [`@wxt-dev/auto-icons`](https://github.com/wxt-dev/wxt/blob/main/packages/auto-icons)
+* [`@wxt-dev/i18n`](https://github.com/wxt-dev/wxt/blob/main/packages/i18n)
+* [`@wxt-dev/module-vue`](https://github.com/wxt-dev/wxt/blob/main/packages/module-vue)
+* [`@wxt-dev/module-solid`](https://github.com/wxt-dev/wxt/blob/main/packages/module-solid)
+* [`@wxt-dev/module-react`](https://github.com/wxt-dev/wxt/blob/main/packages/module-react)
+* [`@wxt-dev/module-svelte`](https://github.com/wxt-dev/wxt/blob/main/packages/module-svelte)
+

@@ -1,0 +1,405 @@
+# WXT
+
+> Next-gen Web Extension Framework
+
+An open source tool that makes web extension development faster than ever before.
+
+## Table of Contents
+
+### Get Started
+
+- [Welcome to WXT](/guide/introduction.md)
+- [Installation](/guide/installation.md)
+
+### Essentials
+
+- [Project Structure](/guide/essentials/project-structure.md)
+- [Entrypoints](/guide/essentials/entrypoints.md)
+- [Extension APIs](/guide/essentials/extension-apis.md)
+- [Assets](/guide/essentials/assets.md)
+- [Targeting Different Browsers](/guide/essentials/target-different-browsers.md)
+- [Content Scripts](/guide/essentials/content-scripts.md)
+- [Storage](/guide/essentials/storage.md)
+- [Messaging](/guide/essentials/messaging.md)
+- [I18n](/guide/essentials/i18n.md)
+- [Favicons](/guide/essentials/favicons.md)
+- [Scripting](/guide/essentials/scripting.md)
+- [WXT Modules](/guide/essentials/wxt-modules.md)
+- [Frontend Frameworks](/guide/essentials/frontend-frameworks.md)
+- [ES Modules](/guide/essentials/es-modules.md)
+- [Remote Code](/guide/essentials/remote-code.md)
+- [Unit Testing](/guide/essentials/unit-testing.md)
+- [E2E Testing](/guide/essentials/e2e-testing.md)
+- [Publishing](/guide/essentials/publishing.md)
+- [Testing Updates](/guide/essentials/testing-updates.md)
+
+#### Configuration
+
+- [Manifest](/guide/essentials/config/guide/essentials/config/manifest.md)
+- [Browser Startup](/guide/essentials/config/guide/essentials/config/browser-startup.md)
+- [Auto-imports](/guide/essentials/config/guide/essentials/config/auto-imports.md)
+- [Environment Variables](/guide/essentials/config/guide/essentials/config/environment-variables.md)
+- [Runtime Config](/guide/essentials/config/guide/essentials/config/runtime.md)
+- [Vite](/guide/essentials/config/guide/essentials/config/vite.md)
+- [Build Modes](/guide/essentials/config/guide/essentials/config/build-mode.md)
+- [TypeScript Configuration](/guide/essentials/config/guide/essentials/config/typescript.md)
+- [Hooks](/guide/essentials/config/guide/essentials/config/hooks.md)
+- [Entrypoint Loaders](/guide/essentials/config/guide/essentials/config/entrypoint-loaders.md)
+
+### Resources
+
+- [Compare](/guide/resources/compare.md)
+- [FAQ](/guide/resources/faq.md)
+- [Community](/guide/resources/community.md)
+- [Upgrading WXT](/guide/resources/upgrading.md)
+- [Migrate to WXT](/guide/resources/migrate.md)
+- [How WXT Works](/guide/resources/how-wxt-works.md)
+
+### CLI Reference
+
+- [`wxt`](/api/cli/wxt.md)
+- [`wxt build`](/api/cli/wxt-build.md)
+- [`wxt zip`](/api/cli/wxt-zip.md)
+- [`wxt prepare`](/api/cli/wxt-prepare.md)
+- [`wxt clean`](/api/cli/wxt-clean.md)
+- [`wxt init`](/api/cli/wxt-init.md)
+- [`wxt submit`](/api/cli/wxt-submit.md)
+- [`wxt submit init`](/api/cli/wxt-submit-init.md)
+
+### API Reference
+
+- [Module: wxt](/api/reference/wxt.md)
+- [Module: wxt/modules](/api/reference/wxt/modules.md)
+- [Module: wxt/testing](/api/reference/wxt/testing.md)
+- [Module: wxt/testing/fake-browser](/api/reference/wxt/testing/fake-browser.md)
+- [Module: wxt/testing/vitest](/api/reference/wxt/testing/vitest.md)
+- [Module: wxt/utils/app-config](/api/reference/wxt/utils/app-config.md)
+- [Module: wxt/utils/content-script-context](/api/reference/wxt/utils/content-script-context.md)
+- [Module: wxt/utils/content-script-ui/iframe](/api/reference/wxt/utils/content-script-ui/iframe.md)
+- [Module: wxt/utils/content-script-ui/integrated](/api/reference/wxt/utils/content-script-ui/integrated.md)
+- [Module: wxt/utils/content-script-ui/shadow-root](/api/reference/wxt/utils/content-script-ui/shadow-root.md)
+- [Module: wxt/utils/content-script-ui/types](/api/reference/wxt/utils/content-script-ui/types.md)
+- [Module: wxt/utils/define-app-config](/api/reference/wxt/utils/define-app-config.md)
+- [Module: wxt/utils/define-background](/api/reference/wxt/utils/define-background.md)
+- [Module: wxt/utils/define-content-script](/api/reference/wxt/utils/define-content-script.md)
+- [Module: wxt/utils/define-unlisted-script](/api/reference/wxt/utils/define-unlisted-script.md)
+- [Module: wxt/utils/define-wxt-plugin](/api/reference/wxt/utils/define-wxt-plugin.md)
+- [Module: wxt/utils/inject-script](/api/reference/wxt/utils/inject-script.md)
+- [Module: wxt/utils/match-patterns](/api/reference/wxt/utils/match-patterns.md)
+- [Module: wxt/utils/split-shadow-root-css](/api/reference/wxt/utils/split-shadow-root-css.md)
+- [Module: wxt/utils/storage](/api/reference/wxt/utils/storage.md)
+
+#### wxt
+
+##### Interfaces <span class="badge">53</span>
+
+- [Interface: BackgroundDefinition](/api/reference/wxt/interfaces/BackgroundDefinition.md)
+- [Interface: BackgroundEntrypoint](/api/reference/wxt/interfaces/BackgroundEntrypoint.md)
+- [Interface: BackgroundEntrypointOptions](/api/reference/wxt/interfaces/BackgroundEntrypointOptions.md)
+- [Interface: BaseContentScriptEntrypointOptions](/api/reference/wxt/interfaces/BaseContentScriptEntrypointOptions.md)
+- [Interface: BaseEntrypoint](/api/reference/wxt/interfaces/BaseEntrypoint.md)
+- [Interface: BaseEntrypointOptions](/api/reference/wxt/interfaces/BaseEntrypointOptions.md)
+- [Interface: BaseScriptEntrypointOptions](/api/reference/wxt/interfaces/BaseScriptEntrypointOptions.md)
+- [Interface: BuildOutput](/api/reference/wxt/interfaces/BuildOutput.md)
+- [Interface: BuildStepOutput](/api/reference/wxt/interfaces/BuildStepOutput.md)
+- [Interface: ConfigEnv](/api/reference/wxt/interfaces/ConfigEnv.md)
+- [Interface: ContentScriptEntrypoint](/api/reference/wxt/interfaces/ContentScriptEntrypoint.md)
+- [Interface: CopiedPublicFile](/api/reference/wxt/interfaces/CopiedPublicFile.md)
+- [Interface: Dependency](/api/reference/wxt/interfaces/Dependency.md)
+- [Interface: EntrypointInfo](/api/reference/wxt/interfaces/EntrypointInfo.md)
+- [Interface: Eslintrc](/api/reference/wxt/interfaces/Eslintrc.md)
+- [Interface: ExtensionRunner](/api/reference/wxt/interfaces/ExtensionRunner.md)
+- [Interface: FirefoxDataCollectionPermissions](/api/reference/wxt/interfaces/FirefoxDataCollectionPermissions.md)
+- [Interface: FsCache](/api/reference/wxt/interfaces/FsCache.md)
+- [Interface: GeneratedPublicFile](/api/reference/wxt/interfaces/GeneratedPublicFile.md)
+- [Interface: GenericEntrypoint](/api/reference/wxt/interfaces/GenericEntrypoint.md)
+- [Interface: InlineConfig](/api/reference/wxt/interfaces/InlineConfig.md)
+- [Interface: IsolatedWorldContentScriptDefinition](/api/reference/wxt/interfaces/IsolatedWorldContentScriptDefinition.md)
+- [Interface: IsolatedWorldContentScriptEntrypointOptions](/api/reference/wxt/interfaces/IsolatedWorldContentScriptEntrypointOptions.md)
+- [Interface: Logger](/api/reference/wxt/interfaces/Logger.md)
+- [Interface: MainWorldContentScriptDefinition](/api/reference/wxt/interfaces/MainWorldContentScriptDefinition.md)
+- [Interface: MainWorldContentScriptEntrypointOptions](/api/reference/wxt/interfaces/MainWorldContentScriptEntrypointOptions.md)
+- [Interface: OptionsEntrypoint](/api/reference/wxt/interfaces/OptionsEntrypoint.md)
+- [Interface: OptionsEntrypointOptions](/api/reference/wxt/interfaces/OptionsEntrypointOptions.md)
+- [Interface: OutputAsset](/api/reference/wxt/interfaces/OutputAsset.md)
+- [Interface: OutputChunk](/api/reference/wxt/interfaces/OutputChunk.md)
+- [Interface: PopupEntrypoint](/api/reference/wxt/interfaces/PopupEntrypoint.md)
+- [Interface: PopupEntrypointOptions](/api/reference/wxt/interfaces/PopupEntrypointOptions.md)
+- [Interface: ReloadContentScriptPayload](/api/reference/wxt/interfaces/ReloadContentScriptPayload.md)
+- [Interface: ResolvedBasePublicFile](/api/reference/wxt/interfaces/ResolvedBasePublicFile.md)
+- [Interface: ResolvedConfig](/api/reference/wxt/interfaces/ResolvedConfig.md)
+- [Interface: ResolvedEslintrc](/api/reference/wxt/interfaces/ResolvedEslintrc.md)
+- [Interface: ServerInfo](/api/reference/wxt/interfaces/ServerInfo.md)
+- [Interface: SidepanelEntrypoint](/api/reference/wxt/interfaces/SidepanelEntrypoint.md)
+- [Interface: SidepanelEntrypointOptions](/api/reference/wxt/interfaces/SidepanelEntrypointOptions.md)
+- [Interface: ThemeIcon](/api/reference/wxt/interfaces/ThemeIcon.md)
+- [Interface: UnlistedScriptDefinition](/api/reference/wxt/interfaces/UnlistedScriptDefinition.md)
+- [Interface: UnlistedScriptEntrypoint](/api/reference/wxt/interfaces/UnlistedScriptEntrypoint.md)
+- [Interface: WebExtConfig](/api/reference/wxt/interfaces/WebExtConfig.md)
+- [Interface: Wxt](/api/reference/wxt/interfaces/Wxt.md)
+- [Interface: WxtBuilder](/api/reference/wxt/interfaces/WxtBuilder.md)
+- [Interface: WxtBuilderServer](/api/reference/wxt/interfaces/WxtBuilderServer.md)
+- [Interface: WxtDevServer](/api/reference/wxt/interfaces/WxtDevServer.md)
+- [Interface: WxtDirFileEntry](/api/reference/wxt/interfaces/WxtDirFileEntry.md)
+- [Interface: WxtDirTypeReferenceEntry](/api/reference/wxt/interfaces/WxtDirTypeReferenceEntry.md)
+- [Interface: WxtHooks](/api/reference/wxt/interfaces/WxtHooks.md)
+- [Interface: WxtModule`<TOptions>`](/api/reference/wxt/interfaces/WxtModule.md)
+- [Interface: WxtModuleWithMetadata`<TOptions>`](/api/reference/wxt/interfaces/WxtModuleWithMetadata.md)
+- [Interface: WxtPackageManager](/api/reference/wxt/interfaces/WxtPackageManager.md)
+
+##### Type Aliases <span class="badge">27</span>
+
+- [Type alias: ContentScriptDefinition](/api/reference/wxt/type-aliases/ContentScriptDefinition.md)
+- [Type alias: Entrypoint](/api/reference/wxt/type-aliases/Entrypoint.md)
+- [Type alias: EntrypointGroup](/api/reference/wxt/type-aliases/EntrypointGroup.md)
+- [Type alias: EslintGlobalsPropValue](/api/reference/wxt/type-aliases/EslintGlobalsPropValue.md)
+- [Type alias: ExtensionRunnerConfig](/api/reference/wxt/type-aliases/ExtensionRunnerConfig.md)
+- [Type alias: FirefoxDataCollectionType](/api/reference/wxt/type-aliases/FirefoxDataCollectionType.md)
+- [Type alias: HookResult](/api/reference/wxt/type-aliases/HookResult.md)
+- [Type alias: OnContentScriptStopped](/api/reference/wxt/type-aliases/OnContentScriptStopped.md)
+- [Type alias: OutputFile](/api/reference/wxt/type-aliases/OutputFile.md)
+- [Type alias: PerBrowserMap`<T>`](/api/reference/wxt/type-aliases/PerBrowserMap.md)
+- [Type alias: PerBrowserOption`<T>`](/api/reference/wxt/type-aliases/PerBrowserOption.md)
+- [Type alias: PublicPathEntry](/api/reference/wxt/type-aliases/PublicPathEntry.md)
+- [Type alias: ResolvedPerBrowserOptions`<T, TOmitted>`](/api/reference/wxt/type-aliases/ResolvedPerBrowserOptions.md)
+- [Type alias: ResolvedPublicFile](/api/reference/wxt/type-aliases/ResolvedPublicFile.md)
+- [Type alias: TargetBrowser](/api/reference/wxt/type-aliases/TargetBrowser.md)
+- [Type alias: TargetManifestVersion](/api/reference/wxt/type-aliases/TargetManifestVersion.md)
+- [Type alias: UserConfig](/api/reference/wxt/type-aliases/UserConfig.md)
+- [Type alias: UserManifest](/api/reference/wxt/type-aliases/UserManifest.md)
+- [Type alias: UserManifestFn](/api/reference/wxt/type-aliases/UserManifestFn.md)
+- [Type alias: WxtCommand](/api/reference/wxt/type-aliases/WxtCommand.md)
+- [Type alias: WxtDirEntry](/api/reference/wxt/type-aliases/WxtDirEntry.md)
+- [Type alias: WxtModuleOptions](/api/reference/wxt/type-aliases/WxtModuleOptions.md)
+- [Type alias: WxtModuleSetup`<TOptions>`](/api/reference/wxt/type-aliases/WxtModuleSetup.md)
+- [Type alias: WxtPlugin](/api/reference/wxt/type-aliases/WxtPlugin.md)
+- [Type alias: WxtResolvedUnimportOptions](/api/reference/wxt/type-aliases/WxtResolvedUnimportOptions.md)
+- [Type alias: WxtUnimportOptions](/api/reference/wxt/type-aliases/WxtUnimportOptions.md)
+- [Type alias: WxtViteConfig](/api/reference/wxt/type-aliases/WxtViteConfig.md)
+
+##### Variables <span class="badge">1</span>
+
+- [Variable: version](/api/reference/wxt/variables/version.md)
+
+##### Functions <span class="badge">10</span>
+
+- [Function: build()](/api/reference/wxt/functions/build.md)
+- [Function: clean()](/api/reference/wxt/functions/clean.md)
+- [Function: createServer()](/api/reference/wxt/functions/createServer.md)
+- [Function: defineConfig()](/api/reference/wxt/functions/defineConfig.md)
+- [Function: defineRunnerConfig()](/api/reference/wxt/functions/defineRunnerConfig.md)
+- [Function: defineWebExtConfig()](/api/reference/wxt/functions/defineWebExtConfig.md)
+- [Function: initialize()](/api/reference/wxt/functions/initialize.md)
+- [Function: normalizePath()](/api/reference/wxt/functions/normalizePath.md)
+- [Function: prepare()](/api/reference/wxt/functions/prepare.md)
+- [Function: zip()](/api/reference/wxt/functions/zip.md)
+
+#### wxt/modules
+
+##### Functions <span class="badge">7</span>
+
+- [Function: addAlias()](/api/reference/wxt/modules/functions/addAlias.md)
+- [Function: addEntrypoint()](/api/reference/wxt/modules/functions/addEntrypoint.md)
+- [Function: addImportPreset()](/api/reference/wxt/modules/functions/addImportPreset.md)
+- [Function: addPublicAssets()](/api/reference/wxt/modules/functions/addPublicAssets.md)
+- [Function: addViteConfig()](/api/reference/wxt/modules/functions/addViteConfig.md)
+- [Function: addWxtPlugin()](/api/reference/wxt/modules/functions/addWxtPlugin.md)
+- [Function: defineWxtModule()](/api/reference/wxt/modules/functions/defineWxtModule.md)
+
+#### wxt/testing
+
+##### Type Aliases <span class="badge">1</span>
+
+- [Type alias: FakeBrowser](/api/reference/wxt/testing/type-aliases/FakeBrowser.md)
+
+##### Variables <span class="badge">1</span>
+
+- [Variable: fakeBrowser](/api/reference/wxt/testing/variables/fakeBrowser.md)
+
+#### wxt/testing/vitest
+
+##### Functions <span class="badge">1</span>
+
+- [Function: WxtVitest()](/api/reference/wxt/testing/vitest/functions/WxtVitest.md)
+
+#### wxt/utils/app-config
+
+##### Functions <span class="badge">2</span>
+
+- [Function: getAppConfig()](/api/reference/wxt/utils/app-config/functions/getAppConfig.md)
+- [Function: useAppConfig()](/api/reference/wxt/utils/app-config/functions/useAppConfig.md)
+
+#### wxt/utils/content-script-context
+
+##### Classes <span class="badge">1</span>
+
+- [Class: ContentScriptContext](/api/reference/wxt/utils/content-script-context/classes/ContentScriptContext.md)
+
+##### Interfaces <span class="badge">1</span>
+
+- [Interface: WxtWindowEventMap](/api/reference/wxt/utils/content-script-context/interfaces/WxtWindowEventMap.md)
+
+#### wxt/utils/content-script-ui/iframe
+
+##### Interfaces <span class="badge">1</span>
+
+- [Interface: IframeContentScriptUi`<TMounted>`](/api/reference/wxt/utils/content-script-ui/iframe/interfaces/IframeContentScriptUi.md)
+
+##### Type Aliases <span class="badge">1</span>
+
+- [Type alias: IframeContentScriptUiOptions`<TMounted>`](/api/reference/wxt/utils/content-script-ui/iframe/type-aliases/IframeContentScriptUiOptions.md)
+
+##### Functions <span class="badge">1</span>
+
+- [Function: createIframeUi()](/api/reference/wxt/utils/content-script-ui/iframe/functions/createIframeUi.md)
+
+#### wxt/utils/content-script-ui/integrated
+
+##### Interfaces <span class="badge">1</span>
+
+- [Interface: IntegratedContentScriptUi`<TMounted>`](/api/reference/wxt/utils/content-script-ui/integrated/interfaces/IntegratedContentScriptUi.md)
+
+##### Type Aliases <span class="badge">1</span>
+
+- [Type alias: IntegratedContentScriptUiOptions`<TMounted>`](/api/reference/wxt/utils/content-script-ui/integrated/type-aliases/IntegratedContentScriptUiOptions.md)
+
+##### Functions <span class="badge">1</span>
+
+- [Function: createIntegratedUi()](/api/reference/wxt/utils/content-script-ui/integrated/functions/createIntegratedUi.md)
+
+#### wxt/utils/content-script-ui/shadow-root
+
+##### Interfaces <span class="badge">1</span>
+
+- [Interface: ShadowRootContentScriptUi`<TMounted>`](/api/reference/wxt/utils/content-script-ui/shadow-root/interfaces/ShadowRootContentScriptUi.md)
+
+##### Type Aliases <span class="badge">1</span>
+
+- [Type alias: ShadowRootContentScriptUiOptions`<TMounted>`](/api/reference/wxt/utils/content-script-ui/shadow-root/type-aliases/ShadowRootContentScriptUiOptions.md)
+
+##### Functions <span class="badge">1</span>
+
+- [Function: createShadowRootUi()](/api/reference/wxt/utils/content-script-ui/shadow-root/functions/createShadowRootUi.md)
+
+#### wxt/utils/content-script-ui/types
+
+##### Interfaces <span class="badge">8</span>
+
+- [Interface: AutoMount](/api/reference/wxt/utils/content-script-ui/types/interfaces/AutoMount.md)
+- [Interface: BaseMountFunctions](/api/reference/wxt/utils/content-script-ui/types/interfaces/BaseMountFunctions.md)
+- [Interface: ContentScriptAnchoredOptions](/api/reference/wxt/utils/content-script-ui/types/interfaces/ContentScriptAnchoredOptions.md)
+- [Interface: ContentScriptInlinePositioningOptions](/api/reference/wxt/utils/content-script-ui/types/interfaces/ContentScriptInlinePositioningOptions.md)
+- [Interface: ContentScriptModalPositioningOptions](/api/reference/wxt/utils/content-script-ui/types/interfaces/ContentScriptModalPositioningOptions.md)
+- [Interface: ContentScriptOverlayPositioningOptions](/api/reference/wxt/utils/content-script-ui/types/interfaces/ContentScriptOverlayPositioningOptions.md)
+- [Interface: ContentScriptUi`<TMounted>`](/api/reference/wxt/utils/content-script-ui/types/interfaces/ContentScriptUi.md)
+- [Interface: MountFunctions](/api/reference/wxt/utils/content-script-ui/types/interfaces/MountFunctions.md)
+
+##### Type Aliases <span class="badge">6</span>
+
+- [Type alias: AutoMountOptions](/api/reference/wxt/utils/content-script-ui/types/type-aliases/AutoMountOptions.md)
+- [Type alias: ContentScriptAppendMode](/api/reference/wxt/utils/content-script-ui/types/type-aliases/ContentScriptAppendMode.md)
+- [Type alias: ContentScriptOverlayAlignment](/api/reference/wxt/utils/content-script-ui/types/type-aliases/ContentScriptOverlayAlignment.md)
+- [Type alias: ContentScriptPositioningOptions](/api/reference/wxt/utils/content-script-ui/types/type-aliases/ContentScriptPositioningOptions.md)
+- [Type alias: ContentScriptUiOptions`<TMounted>`](/api/reference/wxt/utils/content-script-ui/types/type-aliases/ContentScriptUiOptions.md)
+- [Type alias: StopAutoMount](/api/reference/wxt/utils/content-script-ui/types/type-aliases/StopAutoMount.md)
+
+#### wxt/utils/define-app-config
+
+##### Interfaces <span class="badge">1</span>
+
+- [Interface: WxtAppConfig](/api/reference/wxt/utils/define-app-config/interfaces/WxtAppConfig.md)
+
+##### Functions <span class="badge">1</span>
+
+- [Function: defineAppConfig()](/api/reference/wxt/utils/define-app-config/functions/defineAppConfig.md)
+
+#### wxt/utils/define-background
+
+##### Functions <span class="badge">1</span>
+
+- [Function: defineBackground()](/api/reference/wxt/utils/define-background/functions/defineBackground.md)
+
+#### wxt/utils/define-content-script
+
+##### Functions <span class="badge">1</span>
+
+- [Function: defineContentScript()](/api/reference/wxt/utils/define-content-script/functions/defineContentScript.md)
+
+#### wxt/utils/define-unlisted-script
+
+##### Functions <span class="badge">1</span>
+
+- [Function: defineUnlistedScript()](/api/reference/wxt/utils/define-unlisted-script/functions/defineUnlistedScript.md)
+
+#### wxt/utils/define-wxt-plugin
+
+##### Functions <span class="badge">1</span>
+
+- [Function: defineWxtPlugin()](/api/reference/wxt/utils/define-wxt-plugin/functions/defineWxtPlugin.md)
+
+#### wxt/utils/inject-script
+
+##### Interfaces <span class="badge">2</span>
+
+- [Interface: InjectScriptOptions](/api/reference/wxt/utils/inject-script/interfaces/InjectScriptOptions.md)
+- [Interface: InjectScriptResult](/api/reference/wxt/utils/inject-script/interfaces/InjectScriptResult.md)
+
+##### Type Aliases <span class="badge">1</span>
+
+- [Type alias: ScriptPublicPath](/api/reference/wxt/utils/inject-script/type-aliases/ScriptPublicPath.md)
+
+##### Functions <span class="badge">1</span>
+
+- [Function: injectScript()](/api/reference/wxt/utils/inject-script/functions/injectScript.md)
+
+#### wxt/utils/match-patterns
+
+##### Classes <span class="badge">2</span>
+
+- [Class: InvalidMatchPattern](/api/reference/wxt/utils/match-patterns/classes/InvalidMatchPattern.md)
+- [Class: MatchPattern](/api/reference/wxt/utils/match-patterns/classes/MatchPattern.md)
+
+#### wxt/utils/split-shadow-root-css
+
+##### Functions <span class="badge">1</span>
+
+- [Function: splitShadowRootCss()](/api/reference/wxt/utils/split-shadow-root-css/functions/splitShadowRootCss.md)
+
+#### wxt/utils/storage
+
+##### Classes <span class="badge">1</span>
+
+- [Class: MigrationError](/api/reference/wxt/utils/storage/classes/MigrationError.md)
+
+##### Interfaces <span class="badge">6</span>
+
+- [Interface: GetItemOptions`<T>`](/api/reference/wxt/utils/storage/interfaces/GetItemOptions.md)
+- [Interface: RemoveItemOptions](/api/reference/wxt/utils/storage/interfaces/RemoveItemOptions.md)
+- [Interface: SnapshotOptions](/api/reference/wxt/utils/storage/interfaces/SnapshotOptions.md)
+- [Interface: WxtStorage](/api/reference/wxt/utils/storage/interfaces/WxtStorage.md)
+- [Interface: WxtStorageItem`<TValue, TMetadata>`](/api/reference/wxt/utils/storage/interfaces/WxtStorageItem.md)
+- [Interface: WxtStorageItemOptions`<T>`](/api/reference/wxt/utils/storage/interfaces/WxtStorageItemOptions.md)
+
+##### Type Aliases <span class="badge">5</span>
+
+- [Type alias: StorageArea](/api/reference/wxt/utils/storage/type-aliases/StorageArea.md)
+- [Type alias: StorageAreaChanges](/api/reference/wxt/utils/storage/type-aliases/StorageAreaChanges.md)
+- [Type alias: StorageItemKey](/api/reference/wxt/utils/storage/type-aliases/StorageItemKey.md)
+- [Type alias: Unwatch](/api/reference/wxt/utils/storage/type-aliases/Unwatch.md)
+- [Type alias: WatchCallback`<T>`](/api/reference/wxt/utils/storage/type-aliases/WatchCallback.md)
+
+##### Variables <span class="badge">1</span>
+
+- [Variable: storage](/api/reference/wxt/utils/storage/variables/storage.md)
+
+### Other
+
+- [`@wxt-dev/i18n`](/i18n.md)
+- [`@wxt-dev/is-background`](/is-background.md)
+- [`@wxt-dev/runner`](/runner.md)
+- [API](/api/reference.md)
+- [Untitled](/examples.md)
+- [WXT Analytics](/analytics.md)
+- [WXT Auto Icons](/auto-icons.md)
+- [WXT Storage](/storage.md)
+- [WXT UnoCSS](/unocss.md)
