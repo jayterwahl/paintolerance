@@ -12,6 +12,7 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "clean": "wxt clean",
+    "qa:receiver": "node scripts/visual-qa/receiver.mjs",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {

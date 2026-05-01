@@ -12,6 +12,10 @@ export default defineConfig({
     description:
       'Simulated hostile replies on your own tweets to build up your pain tolerance for internet nonsense.',
     permissions: ['storage'],
+    host_permissions: [
+      'http://localhost:47831/*',
+      'http://127.0.0.1:47831/*',
+    ],
     content_security_policy: {
       extension_pages: "script-src 'self'; object-src 'self'",
     },
