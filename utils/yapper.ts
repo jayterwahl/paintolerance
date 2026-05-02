@@ -261,6 +261,81 @@ export const PT_YAPPER = (() => {
     return Math.min(upperExclusive - 1, Math.max(1, Math.floor(percentage * upperExclusive)));
   }
 
+  function randomInt(rng: Rng, min: number, max: number): number {
+    const lower = Math.ceil(min);
+    const upper = Math.floor(max);
+    if (upper <= lower) return lower;
+    return lower + Math.floor(rng() * (upper - lower + 1));
+  }
+
+  function boundedSmallCount(rng: Rng, max: number, ceiling: number): number {
+    const capped = Math.max(1, Math.min(max, Math.floor(ceiling)));
+    // Squared RNG heavily favors 1 while still allowing occasional larger counts.
+    return Math.max(1, Math.min(capped, 1 + Math.floor(rng() * rng() * capped)));
+  }
+
+  /**
+   * Deterministically choose reply/like counts that cannot exceed the rendered
+   * reply view count. The distribution is intentionally sparse: most fake
+   * replies get no engagement, some get one or two likes/replies, and larger
+   * outliers are gated at the parent-tweet level so every generated thread does
+   * not automatically contain a high-engagement fake reply.
+   */
+  function generateReplyEngagementCounts(
+    replySeed: string,
+    parentTweetSeed: string,
+    replyViews: number,
+  ): Pick<ReplyMetrics, 'likes' | 'replies'> {
+    const views = Math.max(0, Math.floor(replyViews));
+    if (views <= 0) return { likes: 0, replies: 0 };
+
+    const rng = makeRng(hashStr(`${replySeed}:engagement`));
+    const outliersAllowed = hashStr(`${parentTweetSeed}:engagement-outliers`) % 3 === 0;
+
+    let likes = 0;
+    const likeOutlierRoll = rng();
+    if (outliersAllowed && views >= 8 && likeOutlierRoll < 0.16) {
+      const min = Math.max(2, Math.floor(views * 0.08));
+      const max = Math.max(min, Math.floor(views * (0.20 + rng() * 0.35)));
+      likes = randomInt(rng, min, Math.min(views, max));
+    } else {
+      const roll = rng();
+      if (roll < 0.72) {
+        likes = 0;
+      } else if (roll < 0.93) {
+        likes = boundedSmallCount(rng, views, Math.min(2, Math.ceil(views * 0.05)));
+      } else if (roll < 0.985) {
+        likes = boundedSmallCount(rng, views, Math.min(6, Math.ceil(views * 0.12)));
+      } else {
+        likes = boundedSmallCount(rng, views, Math.min(12, Math.ceil(views * 0.20)));
+      }
+    }
+
+    let replies = 0;
+    const replyOutlierRoll = rng();
+    if (outliersAllowed && views >= 15 && replyOutlierRoll < 0.035) {
+      const min = Math.max(2, Math.floor(views * 0.03));
+      const max = Math.max(min, Math.floor(views * (0.08 + rng() * 0.18)));
+      replies = randomInt(rng, min, Math.min(views, max));
+    } else {
+      const roll = rng();
+      if (roll < 0.88) {
+        replies = 0;
+      } else if (roll < 0.97) {
+        replies = 1;
+      } else if (roll < 0.995) {
+        replies = boundedSmallCount(rng, views, Math.min(3, Math.ceil(views * 0.04)));
+      } else {
+        replies = boundedSmallCount(rng, views, Math.min(6, Math.ceil(views * 0.08)));
+      }
+    }
+
+    return {
+      likes: Math.min(views, likes),
+      replies: Math.min(views, replies),
+    };
+  }
+
   /**
    * Generate a batch of fake replies for a tweet.
    *
@@ -279,5 +354,11 @@ export const PT_YAPPER = (() => {
     return replies;
   }
 
-  return { generateReply, generateReplyCount, generateReplyViewCount, generateReplies };
+  return {
+    generateReply,
+    generateReplyCount,
+    generateReplyEngagementCounts,
+    generateReplyViewCount,
+    generateReplies,
+  };
 })();

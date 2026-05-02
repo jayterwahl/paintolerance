@@ -12,7 +12,36 @@ import { PT_YAPPER, type GeneratedReply } from '../utils/yapper';
  */
 type Intensity = 'mild' | 'medium' | 'unhinged';
 type ActionType = 'reply' | 'retweet' | 'like' | 'bookmark' | 'views';
+type HoverActionKind = 'reply' | 'repost' | 'like' | 'unlike' | 'view' | 'bookmark' | 'share' | 'more';
+type ToggleActionKind = 'repost' | 'like' | 'bookmark';
 type SvgShape = readonly ['path' | 'polyline', string];
+
+interface HoverActionStyle {
+  tooltip: string;
+  color: string;
+  backgroundColor: string;
+}
+
+const ACTION_GRAY = 'rgb(113, 118, 123)';
+const ACTION_BLUE = 'rgb(29, 155, 240)';
+const ACTION_GREEN = 'rgb(0, 186, 124)';
+const ACTION_PINK = 'rgb(249, 24, 128)';
+const HEART_OUTLINE_SVG = '<g><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
+const HEART_FILLED_SVG = '<g><path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
+const BOOKMARK_OUTLINE_SVG = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g>';
+const BOOKMARK_FILLED_SVG = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5z"></path></g>';
+
+// X/Twitter's native reply-action hover colours, captured from real reply UI.
+const HOVER_ACTION_STYLES: Record<HoverActionKind, HoverActionStyle> = {
+  reply: { tooltip: 'Reply', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
+  repost: { tooltip: 'Repost', color: ACTION_GREEN, backgroundColor: 'rgba(0, 186, 124, 0.1)' },
+  like: { tooltip: 'Like', color: ACTION_PINK, backgroundColor: 'rgba(249, 24, 128, 0.1)' },
+  unlike: { tooltip: 'Unlike', color: ACTION_PINK, backgroundColor: 'rgba(249, 24, 128, 0.1)' },
+  view: { tooltip: 'View', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
+  bookmark: { tooltip: 'Bookmark', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
+  share: { tooltip: 'Share', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
+  more: { tooltip: 'More', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
+};
 
 interface Settings {
   handle: string;
@@ -78,6 +107,9 @@ export default defineContentScript({
   const threadInjections = new Map<string, ThreadInjection>();
   let threadLayoutRafId: number | null = null;
   let threadResizeObserver: ResizeObserver | null = null;
+  let hoverTooltipEl: HTMLDivElement | null = null;
+  let hoverTooltipOwner: HTMLElement | null = null;
+  let hoverTooltipTimer: number | null = null;
 
   function isDebugEnabled(): boolean {
     return new URLSearchParams(location.search).has('ptdebug') ||
@@ -698,20 +730,337 @@ export default defineContentScript({
     return actionItemFor(row, row.querySelector(selector));
   }
 
-  function tintActionGray(action: Element): void {
+  function setActionTreeColor(action: Element, color: string): void {
     if (action instanceof HTMLElement) {
-      setImportant(action, 'color', 'rgb(113, 118, 123)');
+      setImportant(action, 'color', color);
     }
 
     for (const child of action.querySelectorAll<HTMLElement>('*')) {
-      setImportant(child, 'color', 'rgb(113, 118, 123)');
+      setImportant(child, 'color', color);
     }
 
-    const svg = action.querySelector<SVGSVGElement>('svg');
-    if (svg) {
-      svg.style.setProperty('color', 'rgb(113, 118, 123)', 'important');
+    for (const svg of action.querySelectorAll<SVGSVGElement>('svg')) {
+      svg.style.setProperty('color', color, 'important');
       svg.style.setProperty('fill', 'currentColor', 'important');
     }
+  }
+
+  function tintActionGray(action: Element): void {
+    setActionTreeColor(action, ACTION_GRAY);
+  }
+
+  function actionControlFor(action: HTMLElement): HTMLElement {
+    if (action.matches('button, a, [role="button"], [role="link"], [data-pt-header-more="true"]')) {
+      return action;
+    }
+
+    return action.querySelector<HTMLElement>(
+      'button, a, [role="button"], [role="link"], [data-pt-header-more="true"]',
+    ) ?? action;
+  }
+
+  function findHoverActionControl(root: Element, row: Element | null, selector: string): HTMLElement | null {
+    const item = findActionItem(row, selector);
+    if (item) return actionControlFor(item);
+
+    const direct = root.querySelector<HTMLElement>(selector);
+    return direct ? actionControlFor(direct) : null;
+  }
+
+  function hoverBackgroundForAction(action: HTMLElement): HTMLElement | null {
+    const svg = action.querySelector<SVGSVGElement>('svg');
+    const iconWrap = svg?.parentElement instanceof HTMLElement ? svg.parentElement : null;
+    if (!svg || !iconWrap) return null;
+
+    if (window.getComputedStyle(iconWrap).position === 'static') {
+      setImportant(iconWrap, 'position', 'relative');
+    }
+    svg.style.setProperty('position', 'relative', 'important');
+    svg.style.setProperty('z-index', '1', 'important');
+
+    let background = iconWrap.querySelector<HTMLElement>('[data-pt-hover-bg="true"]');
+    const previous = svg.previousElementSibling;
+    if (!background && previous instanceof HTMLElement && previous.tagName === 'DIV') {
+      background = previous;
+      background.dataset.ptHoverBg = 'true';
+    }
+
+    if (!background) {
+      background = document.createElement('div');
+      background.dataset.ptHoverBg = 'true';
+      setImportant(background, 'position', 'absolute');
+      setImportant(background, 'left', '50%');
+      setImportant(background, 'top', '50%');
+      setImportant(background, 'width', '34px');
+      setImportant(background, 'height', '34px');
+      setImportant(background, 'border-radius', '9999px');
+      setImportant(background, 'transform', 'translate(-50%, -50%)');
+      setImportant(background, 'z-index', '0');
+      iconWrap.insertBefore(background, svg);
+    }
+
+    setImportant(background, 'pointer-events', 'none');
+    setImportant(background, 'transition-property', 'background-color');
+    setImportant(background, 'transition-duration', '0.2s');
+    return background;
+  }
+
+  function isSelectedAction(action: HTMLElement): boolean {
+    return action.dataset.ptActionSelected === 'true';
+  }
+
+  function isToggleActionKind(kind: HoverActionKind): kind is ToggleActionKind {
+    return kind === 'repost' || kind === 'like' || kind === 'bookmark';
+  }
+
+  function restingActionColor(action: HTMLElement, kind: HoverActionKind): string {
+    return isSelectedAction(action) && isToggleActionKind(kind)
+      ? HOVER_ACTION_STYLES[kind].color
+      : ACTION_GRAY;
+  }
+
+  function tooltipLabelForAction(action: HTMLElement, kind: HoverActionKind): string {
+    if (!isSelectedAction(action)) return HOVER_ACTION_STYLES[kind].tooltip;
+    if (kind === 'repost') return 'Undo repost';
+    if (kind === 'bookmark') return 'Remove from Bookmarks';
+    if (kind === 'like' || kind === 'unlike') return 'Unlike';
+    return HOVER_ACTION_STYLES[kind].tooltip;
+  }
+
+  function setActionHoverState(action: HTMLElement, kind: HoverActionKind, isHovered: boolean): void {
+    const style = HOVER_ACTION_STYLES[kind];
+    setActionTreeColor(action, isHovered ? style.color : restingActionColor(action, kind));
+
+    const background = hoverBackgroundForAction(action);
+    if (background) {
+      setImportant(
+        background,
+        'background-color',
+        isHovered ? style.backgroundColor : 'rgba(0, 0, 0, 0)',
+      );
+    }
+  }
+
+  function setActionSvgMarkup(action: HTMLElement, markup: string): void {
+    const svg = action.querySelector<SVGSVGElement>('svg');
+    if (svg) svg.innerHTML = markup;
+  }
+
+  function baseActionMetric(action: HTMLElement): number {
+    if (action.dataset.ptBaseMetric === undefined) {
+      action.dataset.ptBaseMetric = String(parseMetricText(action.textContent ?? ''));
+    }
+    return parseMetricText(action.dataset.ptBaseMetric);
+  }
+
+  function updateToggleMetric(action: HTMLElement, kind: ToggleActionKind, selected: boolean): void {
+    if (kind === 'bookmark') return;
+    setMetricText(action, baseActionMetric(action) + (selected ? 1 : 0));
+  }
+
+  function setFakeActionSelected(action: HTMLElement, kind: ToggleActionKind, selected: boolean): void {
+    if (action.dataset.ptBaseAriaLabel === undefined) {
+      action.dataset.ptBaseAriaLabel = action.getAttribute('aria-label') ?? '';
+    }
+
+    action.dataset.ptActionSelected = selected ? 'true' : 'false';
+    action.setAttribute('aria-pressed', selected ? 'true' : 'false');
+
+    if (kind === 'repost') {
+      action.setAttribute('data-testid', selected ? 'unretweet' : 'retweet');
+      action.setAttribute('aria-label', selected ? 'Undo repost' : action.dataset.ptBaseAriaLabel);
+    } else if (kind === 'like') {
+      action.setAttribute('data-testid', selected ? 'unlike' : 'like');
+      action.setAttribute('aria-label', selected ? 'Unlike' : action.dataset.ptBaseAriaLabel);
+      setActionSvgMarkup(action, selected ? HEART_FILLED_SVG : HEART_OUTLINE_SVG);
+    } else {
+      action.setAttribute('data-testid', 'bookmark');
+      action.setAttribute('aria-label', selected ? 'Remove from Bookmarks' : action.dataset.ptBaseAriaLabel);
+      setActionSvgMarkup(action, selected ? BOOKMARK_FILLED_SVG : BOOKMARK_OUTLINE_SVG);
+    }
+
+    updateToggleMetric(action, kind, selected);
+    setActionHoverState(action, kind, action.matches(':hover'));
+  }
+
+  function toggleFakeAction(action: HTMLElement, kind: ToggleActionKind): void {
+    setFakeActionSelected(action, kind, !isSelectedAction(action));
+  }
+
+  function isUnlikeAction(action: HTMLElement): boolean {
+    const ariaLabel = action.getAttribute('aria-label') ??
+      action.querySelector<HTMLElement>('[aria-label]')?.getAttribute('aria-label') ??
+      '';
+
+    return action.matches('[data-testid="unlike"]') ||
+      action.querySelector('[data-testid="unlike"]') !== null ||
+      /\b(Unlike|Liked)\b/i.test(ariaLabel);
+  }
+
+  function clearHoverTooltipTimer(): void {
+    if (hoverTooltipTimer !== null) {
+      window.clearTimeout(hoverTooltipTimer);
+      hoverTooltipTimer = null;
+    }
+  }
+
+  function hideHoverTooltip(owner?: HTMLElement): void {
+    if (owner && hoverTooltipOwner && owner !== hoverTooltipOwner) return;
+    clearHoverTooltipTimer();
+    hoverTooltipEl?.remove();
+    hoverTooltipEl = null;
+    hoverTooltipOwner = null;
+  }
+
+  function showHoverTooltip(owner: HTMLElement, label: string): void {
+    clearHoverTooltipTimer();
+    hoverTooltipEl?.remove();
+    hoverTooltipEl = null;
+    hoverTooltipOwner = null;
+
+    const tooltip = document.createElement('div');
+    tooltip.dataset.ptHoverTooltip = 'true';
+    tooltip.textContent = label;
+    const fontFamily = window.getComputedStyle(document.body).fontFamily;
+    tooltip.style.cssText =
+      'position:fixed;z-index:2147483647;pointer-events:none;' +
+      'padding:2px 4px;border-radius:2px;background:rgb(83, 100, 113);' +
+      'color:rgb(255, 255, 255);font-size:12px;line-height:18px;font-weight:400;' +
+      'white-space:nowrap;box-sizing:border-box;' +
+      `font-family:${fontFamily};`;
+    document.body.appendChild(tooltip);
+
+    const anchor = owner.querySelector<HTMLElement>('[data-pt-hover-bg="true"]') ??
+      owner.querySelector<SVGSVGElement>('svg') ??
+      owner;
+    const ownerRect = anchor.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const gap = 6;
+    let top = ownerRect.bottom + gap;
+    if (top + tooltipRect.height > window.innerHeight - 4) {
+      top = ownerRect.top - tooltipRect.height - gap;
+    }
+
+    const left = Math.min(
+      Math.max(4, ownerRect.left + ownerRect.width / 2 - tooltipRect.width / 2),
+      Math.max(4, window.innerWidth - tooltipRect.width - 4),
+    );
+
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.top = `${Math.round(Math.max(4, top))}px`;
+    hoverTooltipEl = tooltip;
+    hoverTooltipOwner = owner;
+  }
+
+  function scheduleHoverTooltip(owner: HTMLElement, label: string): void {
+    clearHoverTooltipTimer();
+    hoverTooltipTimer = window.setTimeout(() => {
+      hoverTooltipTimer = null;
+      if (!document.contains(owner)) return;
+      showHoverTooltip(owner, label);
+    }, 750);
+  }
+
+  function installActionHover(
+    action: HTMLElement | null,
+    kind: HoverActionKind,
+    toggleKind?: ToggleActionKind,
+  ): void {
+    if (!action) return;
+    const installedKind = action.dataset.ptHoverInstalled as HoverActionKind | undefined;
+    if (installedKind === kind) return;
+
+    action.dataset.ptHoverInstalled = kind;
+    action.dataset.ptHoverTooltip = tooltipLabelForAction(action, kind);
+    setImportant(action, 'cursor', 'pointer');
+    if (toggleKind) {
+      action.dataset.ptBaseMetric = String(parseMetricText(action.textContent ?? ''));
+      action.dataset.ptBaseAriaLabel = action.getAttribute('aria-label') ?? '';
+      setFakeActionSelected(action, toggleKind, false);
+    } else {
+      setActionHoverState(action, kind, false);
+    }
+
+    action.addEventListener('mouseenter', () => {
+      setActionHoverState(action, kind, true);
+      scheduleHoverTooltip(action, tooltipLabelForAction(action, kind));
+    });
+    action.addEventListener('mouseleave', () => {
+      setActionHoverState(action, kind, false);
+      hideHoverTooltip(action);
+    });
+    action.addEventListener('blur', () => {
+      setActionHoverState(action, kind, false);
+      hideHoverTooltip(action);
+    });
+    action.addEventListener('mousedown', () => hideHoverTooltip(action));
+    action.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (toggleKind) toggleFakeAction(action, toggleKind);
+      const tooltipLabel = tooltipLabelForAction(action, kind);
+      action.dataset.ptHoverTooltip = tooltipLabel;
+      hideHoverTooltip(action);
+      if (toggleKind && action.matches(':hover')) {
+        scheduleHoverTooltip(action, tooltipLabel);
+      }
+    });
+  }
+
+  function installInjectedReplyHoverAffordances(root: HTMLElement): void {
+    const row = root.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+
+    installActionHover(findHoverActionControl(root, row, '[data-testid="reply"]'), 'reply');
+    installActionHover(
+      findHoverActionControl(
+        root,
+        row,
+        '[data-testid="retweet"], [data-testid="unretweet"], [aria-label*="Repost"], [aria-label*="repost"]',
+      ),
+      'repost',
+      'repost',
+    );
+
+    const likeAction = findHoverActionControl(
+      root,
+      row,
+      '[data-testid="like"], [data-testid="unlike"], [aria-label*="Like"], [aria-label*="Liked"]',
+    );
+    installActionHover(likeAction, likeAction && isUnlikeAction(likeAction) ? 'unlike' : 'like', 'like');
+
+    installActionHover(
+      findHoverActionControl(
+        root,
+        row,
+        'a[href*="/analytics"], [aria-label*="View post analytics"], [aria-label*="view post analytics"]',
+      ),
+      'view',
+    );
+    installActionHover(
+      findHoverActionControl(root, row, '[data-testid="bookmark"], [aria-label*="Bookmark"]'),
+      'bookmark',
+      'bookmark',
+    );
+    installActionHover(
+      findHoverActionControl(
+        root,
+        row,
+        '[data-testid="share"], [data-testid="send"], [aria-label*="Share"], [aria-label*="share"]',
+      ),
+      'share',
+    );
+
+    const overlayMore = root.querySelector<HTMLElement>('[data-pt-header-more="true"]');
+    const nativeMore = root.querySelector<HTMLElement>(
+      '[data-testid="caret"], button[aria-label="More"], [role="button"][aria-label="More"]',
+    );
+    installActionHover(overlayMore ?? (nativeMore ? actionControlFor(nativeMore) : null), 'more');
+  }
+
+  function isMoreActionSvg(svg: SVGSVGElement): boolean {
+    return Array.from(svg.querySelectorAll('path')).some((path) =>
+      (path.getAttribute('d') ?? '').startsWith('M3 12c0-1.1'),
+    );
   }
 
   function resetLikeAction(root: Element, count: number): void {
@@ -726,11 +1075,7 @@ export default defineContentScript({
 
     tintActionGray(action);
 
-    const svg = action.querySelector<SVGSVGElement>('svg');
-    if (svg) {
-      svg.innerHTML = '<g><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
-    }
-
+    setActionSvgMarkup(action as HTMLElement, HEART_OUTLINE_SVG);
     setMetricText(action, count);
   }
 
@@ -806,13 +1151,17 @@ export default defineContentScript({
     bookmarkItem.setAttribute('aria-label', 'Bookmark');
     bookmarkItem.removeAttribute('aria-pressed');
 
+    const bookmarkControl = actionControlFor(bookmarkItem);
+    bookmarkControl.setAttribute('data-testid', 'bookmark');
+    bookmarkControl.setAttribute('aria-label', 'Bookmark');
+    bookmarkControl.removeAttribute('aria-pressed');
+    bookmarkControl.removeAttribute('aria-expanded');
+    bookmarkControl.removeAttribute('aria-haspopup');
+
     const transition = bookmarkItem.querySelector('[data-testid="app-text-transition-container"]');
     transition?.remove();
 
-    const svg = bookmarkItem.querySelector<SVGSVGElement>('svg');
-    if (svg) {
-      svg.innerHTML = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g>';
-    }
+    setActionSvgMarkup(bookmarkItem, BOOKMARK_OUTLINE_SVG);
     tintActionGray(bookmarkItem);
 
     row.insertBefore(bookmarkItem, shareItem);
@@ -874,30 +1223,61 @@ export default defineContentScript({
     setImportant(overlay, 'right', `${templateTweetRect.right - controlsRect.right}px`);
     setImportant(overlay, 'width', `${controlsRect.width}px`);
     setImportant(overlay, 'height', `${controlsRect.height}px`);
-    setImportant(overlay, 'color', 'rgb(113, 118, 123)');
+    setImportant(overlay, 'color', ACTION_GRAY);
     setImportant(overlay, 'z-index', '2');
     setImportant(overlay, 'pointer-events', 'none');
 
+    const explicitMoreIndex = sourceSvgs.findIndex(isMoreActionSvg);
+    const moreIndex = explicitMoreIndex === -1 ? sourceSvgs.length - 1 : explicitMoreIndex;
+
     sourceSvgs.forEach((svg, index) => {
       const sourceRect = sourceRects[index];
+      const isMore = index === moreIndex;
+      const hitSize = isMore ? Math.max(34, sourceRect.width, sourceRect.height) : sourceRect.width;
       const slot = document.createElement('div');
-      slot.setAttribute('aria-hidden', 'true');
+      if (isMore) {
+        slot.dataset.ptHeaderMore = 'true';
+        slot.setAttribute('role', 'button');
+        slot.setAttribute('aria-label', 'More');
+        slot.setAttribute('tabindex', '-1');
+      } else {
+        slot.setAttribute('aria-hidden', 'true');
+      }
       setImportant(slot, 'position', 'absolute');
-      setImportant(slot, 'left', `${sourceRect.left - controlsRect.left}px`);
-      setImportant(slot, 'top', `${sourceRect.top - controlsRect.top}px`);
-      setImportant(slot, 'width', `${sourceRect.width}px`);
-      setImportant(slot, 'height', `${sourceRect.height}px`);
-      setImportant(slot, 'color', 'rgb(113, 118, 123)');
+      setImportant(slot, 'left', `${sourceRect.left - controlsRect.left - (hitSize - sourceRect.width) / 2}px`);
+      setImportant(slot, 'top', `${sourceRect.top - controlsRect.top - (hitSize - sourceRect.height) / 2}px`);
+      setImportant(slot, 'width', `${hitSize}px`);
+      setImportant(slot, 'height', `${isMore ? hitSize : sourceRect.height}px`);
+      setImportant(slot, 'color', ACTION_GRAY);
+      setImportant(slot, 'pointer-events', isMore ? 'auto' : 'none');
+      setImportant(slot, 'cursor', isMore ? 'pointer' : 'default');
+      setImportant(slot, 'overflow', 'visible');
+      if (isMore) {
+        setImportant(slot, 'display', 'flex');
+        setImportant(slot, 'align-items', 'center');
+        setImportant(slot, 'justify-content', 'center');
+
+        const background = document.createElement('div');
+        background.dataset.ptHoverBg = 'true';
+        setImportant(background, 'position', 'absolute');
+        setImportant(background, 'inset', '0px');
+        setImportant(background, 'border-radius', '9999px');
+        setImportant(background, 'background-color', 'rgba(0, 0, 0, 0)');
+        setImportant(background, 'pointer-events', 'none');
+        slot.appendChild(background);
+      }
 
       const clone = svg.cloneNode(true) as SVGSVGElement;
       clone.removeAttribute('id');
       clone.style.setProperty('display', 'block', 'important');
       clone.style.setProperty('width', `${sourceRect.width}px`, 'important');
       clone.style.setProperty('height', `${sourceRect.height}px`, 'important');
-      clone.style.setProperty('color', 'rgb(113, 118, 123)', 'important');
+      clone.style.setProperty('color', ACTION_GRAY, 'important');
+      clone.style.setProperty('position', 'relative', 'important');
+      clone.style.setProperty('z-index', '1', 'important');
 
       for (const child of clone.querySelectorAll<SVGElement>('*')) {
-        child.style.setProperty('color', 'rgb(113, 118, 123)', 'important');
+        child.style.setProperty('color', ACTION_GRAY, 'important');
         if (child.getAttribute('fill') !== 'none') child.setAttribute('fill', 'currentColor');
       }
 
@@ -1083,6 +1463,7 @@ export default defineContentScript({
   }
 
   function clearInjectedArtifacts({ clearMarkers = true }: { clearMarkers?: boolean } = {}): void {
+    hideHoverTooltip();
     clearThreadInjections();
 
     for (const [, entry] of vsMap) entry.container.remove();
@@ -1190,18 +1571,20 @@ export default defineContentScript({
     const text = clone.querySelector(PT_SELECTORS.TWEET_TEXT);
     if (text) text.textContent = reply.text;
 
-    setActionMetric(clone, 'reply', reply.metrics.replies);
+    const replySeed = `${parentTweetId}:${reply.handle}:${reply.text}`;
+    const replyViews = PT_YAPPER.generateReplyViewCount(replySeed, parentTweetViews);
+    const engagement = PT_YAPPER.generateReplyEngagementCounts(replySeed, parentTweetId, replyViews);
+
+    setActionMetric(clone, 'reply', engagement.replies);
     setActionMetric(clone, 'retweet', reply.metrics.retweets);
-    resetLikeAction(clone, reply.metrics.likes);
-    setViewsMetric(
-      clone,
-      PT_YAPPER.generateReplyViewCount(`${parentTweetId}:${reply.handle}:${reply.text}`, parentTweetViews),
-    );
+    resetLikeAction(clone, engagement.likes);
+    setViewsMetric(clone, replyViews);
     ensureBookmarkAction(clone, templateBoundary);
     alignActionRowToTemplate(clone, templateBoundary);
     ensureHeaderControls(clone, templateBoundary);
 
     neutralizeInteractiveElements(clone);
+    installInjectedReplyHoverAffordances(clone);
 
     return clone;
   }
