@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pain Tolerance</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Pain Tolerance</h1>
+    <p class="tagline">Build up your tolerance for internet nonsense</p>
+
+    <div class="field">
+      <label for="handle">Your handle</label>
+      <input type="text" id="handle" placeholder="@yourhandle" spellcheck="false" autocomplete="off">
+    </div>
+
+    <div class="field toggle-row">
+      <label for="active">Active</label>
+      <label class="switch">
+        <input type="checkbox" id="active">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label for="intensity">Intensity</label>
+      <select id="intensity">
+        <option value="mild">Mild (3-5 replies)</option>
+        <option value="medium">Medium (6-10 replies)</option>
+        <option value="unhinged">Unhinged (11-20 replies)</option>
+      </select>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

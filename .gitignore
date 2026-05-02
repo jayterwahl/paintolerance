@@ -1,0 +1,11 @@
+node_modules/
+.wxt/
+.output/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.zip
+
+# Raw avatar source dumps are large; optimized extension assets live in public/avatar-pool/.
+images/
