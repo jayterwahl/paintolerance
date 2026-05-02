@@ -1912,6 +1912,7 @@ export default defineContentScript({
     setImportant(el, 'translate', 'none');
     setImportant(el, 'opacity', '1');
     setImportant(el, 'visibility', 'visible');
+    setImportant(el, 'pointer-events', 'auto');
     setImportant(el, 'background-color', getPageBg());
   }
 
@@ -2089,16 +2090,17 @@ export default defineContentScript({
     const src = resolveAvatarUrl(avatarPath);
     if (!src) return;
 
-    const existing = root.querySelector<HTMLImageElement>(`${PT_SELECTORS.TWEET_AVATAR} img, img[src], img`);
-    if (existing) {
+    const avatarRoot = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_AVATAR);
+    if (!avatarRoot) return;
+
+    // Update any real avatar img if the cloned reply has one, but do not rely on
+    // it. Some X avatar DOMs are nested background layers with no img; returning
+    // early there leaves every clone showing the donor/template avatar.
+    for (const existing of avatarRoot.querySelectorAll<HTMLImageElement>('img')) {
       existing.src = src;
       existing.srcset = '';
       existing.alt = '';
-      return;
     }
-
-    const avatarRoot = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_AVATAR);
-    if (!avatarRoot) return;
 
     const avatarContainer = avatarRoot.querySelector<HTMLElement>('[data-testid^="UserAvatar-Container-"]') ??
       avatarRoot.querySelector<HTMLElement>('a') ??
@@ -2115,7 +2117,7 @@ export default defineContentScript({
     injected.alt = '';
     injected.style.cssText =
       'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;' +
-      'border-radius:9999px;z-index:2;display:block;pointer-events:none;';
+      'border-radius:9999px;z-index:999;display:block;pointer-events:none;';
     avatarContainer.appendChild(injected);
   }
 
