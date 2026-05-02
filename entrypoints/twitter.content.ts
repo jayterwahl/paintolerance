@@ -818,24 +818,30 @@ export default defineContentScript({
     svg.style.setProperty('z-index', '1', 'important');
 
     let background = iconWrap.querySelector<HTMLElement>('[data-pt-hover-bg="true"]');
-    const previous = svg.previousElementSibling;
-    if (!background && previous instanceof HTMLElement && previous.tagName === 'DIV') {
-      background = previous;
-      background.dataset.ptHoverBg = 'true';
-    }
-
     if (!background) {
       background = document.createElement('div');
       background.dataset.ptHoverBg = 'true';
-      setImportant(background, 'position', 'absolute');
+      iconWrap.insertBefore(background, svg);
+    }
+
+    setImportant(background, 'position', 'absolute');
+    setImportant(background, 'width', '34px');
+    setImportant(background, 'height', '34px');
+    setImportant(background, 'border-radius', '9999px');
+    setImportant(background, 'transform', 'translate(-50%, -50%)');
+    setImportant(background, 'right', 'auto');
+    setImportant(background, 'bottom', 'auto');
+    setImportant(background, 'margin', '0px');
+    setImportant(background, 'z-index', '0');
+
+    const iconWrapRect = iconWrap.getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
+    if (document.contains(action) && iconWrapRect.width > 0 && iconWrapRect.height > 0 && svgRect.width > 0 && svgRect.height > 0) {
+      setImportant(background, 'left', `${svgRect.left - iconWrapRect.left + svgRect.width / 2}px`);
+      setImportant(background, 'top', `${svgRect.top - iconWrapRect.top + svgRect.height / 2}px`);
+    } else {
       setImportant(background, 'left', '50%');
       setImportant(background, 'top', '50%');
-      setImportant(background, 'width', '34px');
-      setImportant(background, 'height', '34px');
-      setImportant(background, 'border-radius', '9999px');
-      setImportant(background, 'transform', 'translate(-50%, -50%)');
-      setImportant(background, 'z-index', '0');
-      iconWrap.insertBefore(background, svg);
     }
 
     setImportant(background, 'pointer-events', 'none');
@@ -1589,7 +1595,10 @@ export default defineContentScript({
     const bookmarkSvg = root.querySelector<SVGSVGElement>(
       '[data-testid="bookmark"] svg, [aria-label*="Bookmark"] svg',
     );
-    bookmarkSvg?.style.setProperty('margin-right', '0.5rem', 'important');
+    if (!bookmarkSvg) return;
+
+    bookmarkSvg.style.setProperty('margin-right', '0.5rem', 'important');
+    bookmarkSvg.style.removeProperty('transform');
   }
 
   function visibleActionItems(row: Element): HTMLElement[] {
