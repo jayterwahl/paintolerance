@@ -346,6 +346,23 @@ export default defineContentScript({
     return window.getComputedStyle(fontSource).fontFamily;
   }
 
+  function getPagePrimaryTextColor(): string {
+    const sources = [
+      document.querySelector<HTMLElement>('[data-testid="primaryColumn"] [data-testid="tweetText"]'),
+      document.querySelector<HTMLElement>('[data-testid="tweetText"]'),
+      document.querySelector<HTMLElement>('[data-testid="User-Name"] span'),
+      document.body,
+    ];
+    for (const source of sources) {
+      if (!source) continue;
+      const color = window.getComputedStyle(source).color;
+      if (color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent') {
+        return color;
+      }
+    }
+    return 'rgb(15, 20, 25)';
+  }
+
   function getVsOverlay(): HTMLDivElement {
     if (!vsOverlay || !document.contains(vsOverlay)) {
       vsOverlay = document.createElement('div');
@@ -1920,6 +1937,22 @@ export default defineContentScript({
     }
   }
 
+  // The hardcoded fallback reply template bakes in Twitter's lights-out text
+  // color. In light or dim mode the cloned fake replies look ghosted, so
+  // rewrite any element with that exact inline color to use the page's actual
+  // primary text color. No-op when the page already uses the same color.
+  const TEMPLATE_PRIMARY_TEXT_COLOR = 'rgb(231, 233, 234)';
+
+  function applyPagePrimaryTextColor(root: HTMLElement): void {
+    const pageColor = getPagePrimaryTextColor();
+    if (!pageColor || pageColor === TEMPLATE_PRIMARY_TEXT_COLOR) return;
+    for (const el of root.querySelectorAll<HTMLElement>('[style*="color"]')) {
+      if (el.style.color === TEMPLATE_PRIMARY_TEXT_COLOR) {
+        el.style.color = pageColor;
+      }
+    }
+  }
+
   function neutralizeInteractiveElements(root: HTMLElement): void {
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
       anchor.href = '#';
@@ -2220,6 +2253,7 @@ export default defineContentScript({
     ensureHeaderControls(clone, templateBoundary);
 
     neutralizeInteractiveElements(clone);
+    applyPagePrimaryTextColor(clone);
     installInjectedReplyHoverAffordances(clone);
     installInjectedReplyProfileHover(clone, reply);
 
