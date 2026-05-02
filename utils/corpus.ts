@@ -2,7 +2,7 @@
  * Pain Tolerance — Corpus
  *
  * Static data bank: archetype definitions, templates, and slot fillers.
- * Phase 2: All 8 archetypes with full template banks.
+ * Phase 2: Full archetype banks without spam-bot templates.
  */
 
 export const PT_CORPUS = {
@@ -761,6 +761,86 @@ export const PT_CORPUS = {
     nouns: [
       'takes', 'facts', 'truth', 'alpha', 'gains', 'posts', 'chad',
       'king', 'boss', 'wolf', 'lion', 'bear', 'dude', 'bro', 'guy',
+    ],
+
+    profileBios: {
+      default: [
+        'posting through it professionally',
+        'bad take collector. replies are my cardio.',
+        'online in a way my family worries about',
+        'unlicensed opinion haver',
+        'here for discourse, unfortunately',
+        'microdosing consequences and screen time',
+        'public diary with worse lighting',
+        'archive of thoughts that should have stayed drafts',
+        'doing the work, which is mostly arguing',
+        'currently losing an argument to the timeline',
+      ],
+      ratio_guy: [
+        'ratio consultant. no refunds.',
+        'I see bad posts and I say something',
+        'career reply guy, amateur menace',
+        'keeping score because somebody has to',
+        'your favorite poster\'s least favorite reply',
+        'specializing in short replies and long grudges',
+      ],
+      unhinged_reply_guy: [
+        'emotionally available to every bad tweet',
+        'the timeline keeps hurting me and I keep coming back',
+        'screaming into the void with receipts',
+        'currently making this about me',
+        'one notification away from a public spiral',
+        'responds quickly, regrets slowly',
+      ],
+      pseudo_intellectual: [
+        'independent researcher in {concept} and bad vibes',
+        'systems thinker, discourse enjoyer, footnote menace',
+        'reading the room through a theoretical framework',
+        'ask me about {concept} at your own risk',
+        'overexplaining simple things since 2012',
+        'citation needed, personality optional',
+      ],
+      sneering_dismissal: [
+        'here to lower expectations',
+        'professional hater, amateur historian',
+        'documenting the decline in real time',
+        'I judge because I care about standards',
+        'not mad, just disappointed in advance',
+        'curating a museum of avoidable posts',
+      ],
+      concern_troll: [
+        'checking in, but make it judgmental',
+        'wellness advocate for people who should log off',
+        'saying this with love and visible contempt',
+        'gentle feedback, sharpened edges',
+        'here if you need support deleting that',
+        'emotionally invested in your drafts folder',
+      ],
+      off_topic_ranter: [
+        'this connects to my larger point about everything',
+        'available for tangents, unavailable for the point',
+        'local crank, global concerns',
+        'turning every thread into a town hall',
+        'not derailing, broadening the conversation',
+        'single-issue voter, many issues',
+      ],
+      one_word_oracle: [
+        'minimalist hater',
+        'saying less because it is enough',
+        'one word, maximum damage',
+        'brevity is the soul of contempt',
+        'typing from the judgment balcony',
+        'no bio, just vibes and verdicts',
+      ],
+    },
+
+    mutualFollowers: [
+      'm_11', 'Emergent', 'Steve James', 'low quality facts', 'maya',
+      'nora', 'caleb.txt', 'sasha', 'riley', 'burner king', 'alex',
+      'casey', 'jordan', 'posting goblin', 'internet user', 'no context eli',
+      'sam', 'quinn', 'drew', 'parker', 'the group chat', 'morgan',
+      'local maximum', 'ari', 'bad take enjoyer', 'taylor', 'sage',
+      'finn', 'browser tab 47', 'professional lurker', 'derek', 'logan',
     ],
   },
 };

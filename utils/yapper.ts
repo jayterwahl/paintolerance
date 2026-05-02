@@ -22,6 +22,16 @@ export interface ReplyMetrics {
   bookmarks: number;
 }
 
+export interface ReplyProfile {
+  bio: string;
+  followingCount: number;
+  followersCount: number;
+  followsYou: boolean;
+  following: boolean;
+  mutualFollowers: readonly string[];
+  mutualFollowerExtraCount: number;
+}
+
 export interface GeneratedReply {
   archetypeId: string;
   displayName: string;
@@ -31,6 +41,7 @@ export interface GeneratedReply {
   text: string;
   timestamp: string;
   metrics: ReplyMetrics;
+  profile: ReplyProfile;
 }
 
 export const PT_YAPPER = (() => {
@@ -195,6 +206,72 @@ export const PT_YAPPER = (() => {
     return hours + 'h';
   }
 
+  function skewedInt(rng: Rng, min: number, max: number, power = 2): number {
+    const lower = Math.ceil(min);
+    const upper = Math.floor(max);
+    if (upper <= lower) return lower;
+    return lower + Math.floor(Math.pow(rng(), power) * (upper - lower + 1));
+  }
+
+  function generateFollowingCount(rng: Rng): number {
+    const roll = rng();
+    if (roll < 0.58) return skewedInt(rng, 35, 950, 1.5);
+    if (roll < 0.86) return skewedInt(rng, 951, 4_900, 1.2);
+    if (roll < 0.97) return skewedInt(rng, 4_901, 12_000, 1.15);
+    return skewedInt(rng, 12_001, 48_000, 1.1);
+  }
+
+  function generateFollowersCount(rng: Rng, verified: boolean): number {
+    const roll = Math.min(0.999, rng() + (verified ? 0.08 : 0));
+    if (roll < 0.48) return skewedInt(rng, 8, 680, 2.2);
+    if (roll < 0.76) return skewedInt(rng, 681, 4_900, 1.7);
+    if (roll < 0.93) return skewedInt(rng, 4_901, 48_000, 1.35);
+    if (roll < 0.992) return skewedInt(rng, 48_001, 920_000, 1.65);
+    return skewedInt(rng, 920_001, verified ? 48_000_000 : 4_800_000, 1.9);
+  }
+
+  function pickUnique<T>(arr: readonly T[], rng: Rng, count: number): T[] {
+    const pool = [...arr];
+    const picked: T[] = [];
+    while (picked.length < count && pool.length > 0) {
+      const index = Math.floor(rng() * pool.length);
+      const [item] = pool.splice(index, 1);
+      if (item !== undefined) picked.push(item);
+    }
+    return picked;
+  }
+
+  function generateProfile(seed: number, archetypeId: string, verified: boolean): ReplyProfile {
+    const rng = makeRng(hashStr(`${seed}:profile`));
+    const identity = PT_CORPUS.identity;
+    const profileBios = identity.profileBios as Record<string, readonly string[]>;
+    const bioTemplates = profileBios[archetypeId] ?? identity.profileBios.default;
+    const bio = fillSlots(pick(bioTemplates, rng), rng);
+
+    const followingCount = generateFollowingCount(rng);
+    const followersCount = generateFollowersCount(rng, verified);
+    const followsYou = rng() < 0.18;
+    const following = rng() < (followsYou ? 0.42 : 0.24);
+
+    const hasMutuals = rng() < 0.68;
+    const mutualFollowers = hasMutuals
+      ? pickUnique(identity.mutualFollowers, rng, rng() < 0.75 ? 2 : 3)
+      : [];
+    const mutualFollowerExtraCount = mutualFollowers.length > 0
+      ? skewedInt(rng, 4, 340, 1.4)
+      : 0;
+
+    return {
+      bio,
+      followingCount,
+      followersCount,
+      followsYou,
+      following,
+      mutualFollowers,
+      mutualFollowerExtraCount,
+    };
+  }
+
   /**
    * Generate a single fake reply object.
    *
@@ -222,8 +299,9 @@ export const PT_YAPPER = (() => {
     // 5. Generate metrics
     const metrics = generateMetrics(rng);
 
-    // 6. Generate timestamp
+    // 6. Generate timestamp and profile hover-card metadata
     const timestamp = generateTimestamp(rng);
+    const profile = generateProfile(seed, archetype.id, verified);
 
     return {
       archetypeId: archetype.id,
@@ -234,6 +312,7 @@ export const PT_YAPPER = (() => {
       text,
       timestamp,
       metrics,
+      profile,
     };
   }
 
