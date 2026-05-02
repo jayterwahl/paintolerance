@@ -193,20 +193,19 @@ Settings:
 
 ## Archetype system
 
-Each fake reply is generated from one of eight persona archetypes. Archetypes use relative weights, not normalized percentages.
+Each fake reply is generated from one of seven persona archetypes. Archetypes use relative weights, not normalized percentages.
 
 | Archetype | Weight | Description | Example output pattern |
 |---|---:|---|---|
 | Ratio Guy | 22 | One-word or two-word dismissals. Maximum contempt, minimum effort. | `ratio`, `L`, `nobody asked`, `L + {insult}` |
 | Unhinged Reply Guy | 15 | Disproportionate emotional reaction. All-caps optional. Treats mild takes as personal attacks. | `I cannot BELIEVE you would say this. {overreaction}. Blocked.` |
 | Pseudo-Intellectual | 12 | Sneering condescension disguised as insight. Uses `tell me you don't understand X` formats. | `tell me you don't understand {concept} without telling me you don't understand {concept}` |
-| The Bot | 6 | Spam patterns, emoji floods, and profile/pinned-post promotion. | `{emoji_spam} Check out my {spam_product}` |
 | Sneering Dismissal | 18 | More prose-heavy contempt and personal dismissal. | `the confidence in this post is inversely proportional to its quality` |
 | Concern Troll | 8 | Faux-sympathetic framing that's actually dismissive. | `I mean this in the nicest way but {backhanded_concern}` |
 | Off-Topic Ranter | 10 | Ignores the original tweet and launches into an unrelated grievance. | `speaking of which, {unrelated_rant}` |
 | One-Word Oracle | 5 | Single word, emoji, or very short judgment. Enigmatic and infuriating. | `no`, `wrong`, `mid`, `delete this`, `💀` |
 
-The old prototype PRD referenced a Crypto Bro archetype. The current corpus does not include Crypto Bro; it was replaced by Sneering Dismissal and a smaller generic bot/spam archetype.
+The corpus intentionally excludes spam-flavored archetypes (e.g., crypto/OnlyFans/"link in bio" bots). Simulated replies should feel specific and hostile rather than promotional.
 
 ---
 
@@ -218,12 +217,9 @@ Current slot categories:
 
 - `{insult}` — generic dismissals such as `this ain't it`, `touch grass`, `certified clown behavior`.
 - `{concept}` — pseudo-intellectual topics such as `market dynamics`, `game theory`, `systems thinking`.
-- `{emoji_spam}` — emoji sequences such as fire/rocket/100 combos.
 - `{overreaction}` — disproportionate responses such as `my therapist is going to hear about this`.
 - `{backhanded_concern}` — concern-troll phrases such as `maybe log off for a bit`.
 - `{unrelated_rant}` — off-topic tangents such as QR-code menus, printers, tipping culture, etc.
-- `{spam_product}` — bot-promotion targets such as `link in bio`, `newsletter`, `Discord community`.
-- `{hashtag}` — hashtag filler bank. This exists in the corpus but is not currently used by the active templates.
 
 Current corpus notes:
 
