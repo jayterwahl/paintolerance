@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
+import { GROK_ICON_PATH, GROK_ICON_VIEW_BOX } from '../utils/icons';
 import { PT_SELECTORS } from '../utils/selectors';
 import { THREAD_REPLY_TEMPLATE_HTML } from '../utils/thread-reply-template';
 import { PT_YAPPER, type GeneratedReply } from '../utils/yapper';
@@ -12,7 +13,7 @@ import { PT_YAPPER, type GeneratedReply } from '../utils/yapper';
  */
 type Intensity = 'mild' | 'medium' | 'unhinged';
 type ActionType = 'reply' | 'retweet' | 'like' | 'bookmark' | 'views';
-type HoverActionKind = 'reply' | 'repost' | 'like' | 'unlike' | 'view' | 'bookmark' | 'share' | 'more';
+type HoverActionKind = 'reply' | 'repost' | 'like' | 'unlike' | 'view' | 'bookmark' | 'share' | 'grok' | 'more';
 type ToggleActionKind = 'repost' | 'like' | 'bookmark';
 type SvgShape = readonly ['path' | 'polyline', string];
 
@@ -40,16 +41,25 @@ interface ProfileCardTheme {
   shadow: string;
 }
 
+type HeaderControlKind = 'decorative' | 'grok' | 'more';
+
+interface HeaderControlSource {
+  kind: HeaderControlKind;
+  svg: SVGSVGElement | null;
+  rect: DOMRect;
+}
+
 const ACTION_GRAY = 'rgb(113, 118, 123)';
 const ACTION_BLUE = 'rgb(29, 155, 240)';
 const ACTION_GREEN = 'rgb(0, 186, 124)';
 const ACTION_PINK = 'rgb(249, 24, 128)';
+const HEADER_GROK_CENTER_GAP = 26;
 const HEART_OUTLINE_SVG = '<g><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
 const HEART_FILLED_SVG = '<g><path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
 const BOOKMARK_OUTLINE_SVG = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g>';
 const BOOKMARK_FILLED_SVG = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5z"></path></g>';
 const VERIFIED_BADGE_SVG = '<svg viewBox="0 0 22 22" aria-label="Verified account" role="img" style="display:block;width:20px;height:20px;color:rgb(29,155,240);fill:currentColor;flex-shrink:0;"><g><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path></g></svg>';
-const PROFILE_SUMMARY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" style="display:block;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;"><path d="M4 20L20 4"></path><path d="M6.5 15.5c-1.2-3 .1-6.5 3-8.1 2.7-1.5 6.1-.9 8.1 1.5"></path><path d="M17.5 8.5c1.2 3-.1 6.5-3 8.1-2.7 1.5-6.1.9-8.1-1.5"></path></svg>';
+const PROFILE_SUMMARY_SVG = `<svg viewBox="${GROK_ICON_VIEW_BOX}" aria-hidden="true" style="display:block;width:24px;height:24px;fill:currentColor;flex-shrink:0;"><g><path d="${GROK_ICON_PATH}"></path></g></svg>`;
 
 // X/Twitter's native reply-action hover colours, captured from real reply UI.
 const HOVER_ACTION_STYLES: Record<HoverActionKind, HoverActionStyle> = {
@@ -60,6 +70,7 @@ const HOVER_ACTION_STYLES: Record<HoverActionKind, HoverActionStyle> = {
   view: { tooltip: 'View', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
   bookmark: { tooltip: 'Bookmark', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
   share: { tooltip: 'Share', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
+  grok: { tooltip: 'Explain this post', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
   more: { tooltip: 'More', color: ACTION_BLUE, backgroundColor: 'rgba(29, 155, 240, 0.1)' },
 };
 
@@ -1502,6 +1513,15 @@ export default defineContentScript({
       'share',
     );
 
+    const overlayGrok = root.querySelector<HTMLElement>('[data-pt-header-grok="true"]');
+    const nativeGrokCandidate = root.querySelector(
+      '[aria-label="Explain this post"], [aria-label*="Grok"], [data-testid*="grok" i]',
+    );
+    const nativeGrok = nativeGrokCandidate instanceof HTMLElement
+      ? nativeGrokCandidate
+      : nativeGrokCandidate?.closest<HTMLElement>('button, a, [role="button"], [role="link"]') ?? null;
+    installActionHover(overlayGrok ?? (nativeGrok ? actionControlFor(nativeGrok) : null), 'grok');
+
     const overlayMore = root.querySelector<HTMLElement>('[data-pt-header-more="true"]');
     const nativeMore = root.querySelector<HTMLElement>(
       '[data-testid="caret"], button[aria-label="More"], [role="button"][aria-label="More"]',
@@ -1513,6 +1533,40 @@ export default defineContentScript({
     return Array.from(svg.querySelectorAll('path')).some((path) =>
       (path.getAttribute('d') ?? '').startsWith('M3 12c0-1.1'),
     );
+  }
+
+  function isGrokActionSvg(svg: SVGSVGElement): boolean {
+    return Array.from(svg.querySelectorAll('path')).some((path) =>
+      (path.getAttribute('d') ?? '').startsWith('M12.745 20.54l10.97'),
+    );
+  }
+
+  function hideNativeHeaderControls(tweet: HTMLElement): void {
+    const actionRow = tweet.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    const svgs = new Set(topRightHeaderSvgs(tweet));
+
+    // The cloned real reply can already contain a native Grok button from the
+    // template. That source button is often laid out for the donor tweet, so it
+    // can sit far left of More. Hide native header glyphs and draw our overlay
+    // from the current More rect instead of letting stale cloned controls show
+    // through underneath.
+    for (const svg of tweet.querySelectorAll<SVGSVGElement>('svg')) {
+      if (actionRow?.contains(svg)) continue;
+      if (svg.closest(PT_SELECTORS.TWEET_AVATAR)) continue;
+      if (svg.closest('[data-pt-header-controls="true"]')) continue;
+      if (isGrokActionSvg(svg)) svgs.add(svg);
+    }
+
+    for (const svg of svgs) {
+      const control = svg.closest<HTMLElement>('button, a, [role="button"], [role="link"]');
+      if (control) {
+        setImportant(control, 'visibility', 'hidden');
+        setImportant(control, 'pointer-events', 'none');
+      } else {
+        svg.style.setProperty('visibility', 'hidden', 'important');
+        svg.style.setProperty('pointer-events', 'none', 'important');
+      }
+    }
   }
 
   function resetLikeAction(root: Element, count: number): void {
@@ -1653,6 +1707,48 @@ export default defineContentScript({
     return new DOMRect(left, top, right - left, bottom - top);
   }
 
+  function createGrokSvg(width = 22, height = 22): SVGSVGElement {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', GROK_ICON_VIEW_BOX);
+    svg.setAttribute('aria-hidden', 'true');
+
+    const group = document.createElementNS(ns, 'g');
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', GROK_ICON_PATH);
+    path.setAttribute('fill', 'currentColor');
+    group.appendChild(path);
+    svg.appendChild(group);
+
+    svg.style.setProperty('display', 'block', 'important');
+    svg.style.setProperty('width', `${width}px`, 'important');
+    svg.style.setProperty('height', `${height}px`, 'important');
+    svg.style.setProperty('fill', 'currentColor', 'important');
+    svg.style.setProperty('color', ACTION_GRAY, 'important');
+    svg.style.setProperty('position', 'relative', 'important');
+    svg.style.setProperty('z-index', '1', 'important');
+    return svg;
+  }
+
+  function prepareHeaderSvg(svg: SVGSVGElement, width: number, height: number): SVGSVGElement {
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.removeAttribute('id');
+    clone.style.setProperty('display', 'block', 'important');
+    clone.style.setProperty('width', `${width}px`, 'important');
+    clone.style.setProperty('height', `${height}px`, 'important');
+    clone.style.setProperty('color', ACTION_GRAY, 'important');
+    clone.style.setProperty('fill', 'currentColor', 'important');
+    clone.style.setProperty('position', 'relative', 'important');
+    clone.style.setProperty('z-index', '1', 'important');
+
+    for (const child of clone.querySelectorAll<SVGElement>('*')) {
+      child.style.setProperty('color', ACTION_GRAY, 'important');
+      if (child.getAttribute('fill') !== 'none') child.setAttribute('fill', 'currentColor');
+    }
+
+    return clone;
+  }
+
   function ensureHeaderControls(root: Element, templateBoundary: Element): void {
     const cloneTweet = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
     const templateTweet = templateBoundary.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
@@ -1662,10 +1758,47 @@ export default defineContentScript({
     if (sourceSvgs.length === 0) return;
 
     const sourceRects = sourceSvgs.map(svg => svg.getBoundingClientRect());
-    const controlsRect = unionRects(sourceRects);
+    const explicitMoreIndex = sourceSvgs.findIndex(isMoreActionSvg);
+    const moreIndex = explicitMoreIndex === -1 ? sourceSvgs.length - 1 : explicitMoreIndex;
+
+    const controls: HeaderControlSource[] = sourceSvgs
+      .map((svg, index): HeaderControlSource => {
+        const kind: HeaderControlKind = index === moreIndex
+          ? 'more'
+          : isGrokActionSvg(svg) ? 'grok' : 'decorative';
+        return {
+          kind,
+          svg,
+          rect: sourceRects[index],
+        };
+      })
+      // The native template source can carry stale Grok placement from a prior
+      // layout. Always place our reusable Grok icon from the More button so the
+      // header spacing matches the currently rendered real reply below it.
+      .filter(control => control.kind !== 'grok');
+
+    const moreRect = sourceRects[moreIndex];
+    const grokSize = Math.max(20, Math.min(22, moreRect.height || 22));
+    const moreCenterX = moreRect.left + moreRect.width / 2;
+    const moreCenterY = moreRect.top + moreRect.height / 2;
+    controls.push({
+      kind: 'grok',
+      svg: null,
+      rect: new DOMRect(
+        moreCenterX - HEADER_GROK_CENTER_GAP - grokSize / 2,
+        moreCenterY - grokSize / 2,
+        grokSize,
+        grokSize,
+      ),
+    });
+
+    controls.sort((a, b) => a.rect.left - b.rect.left);
+
+    const controlsRect = unionRects(controls.map(control => control.rect));
     if (!controlsRect) return;
 
     root.querySelectorAll('[data-pt-header-controls="true"]').forEach(el => el.remove());
+    hideNativeHeaderControls(cloneTweet);
 
     const templateTweetRect = templateTweet.getBoundingClientRect();
     const overlay = document.createElement('div');
@@ -1679,15 +1812,19 @@ export default defineContentScript({
     setImportant(overlay, 'z-index', '2');
     setImportant(overlay, 'pointer-events', 'none');
 
-    const explicitMoreIndex = sourceSvgs.findIndex(isMoreActionSvg);
-    const moreIndex = explicitMoreIndex === -1 ? sourceSvgs.length - 1 : explicitMoreIndex;
-
-    sourceSvgs.forEach((svg, index) => {
-      const sourceRect = sourceRects[index];
-      const isMore = index === moreIndex;
-      const hitSize = isMore ? Math.max(34, sourceRect.width, sourceRect.height) : sourceRect.width;
+    for (const control of controls) {
+      const sourceRect = control.rect;
+      const isMore = control.kind === 'more';
+      const isGrok = control.kind === 'grok';
+      const isInteractive = isMore || isGrok;
+      const hitSize = isInteractive ? Math.max(34, sourceRect.width, sourceRect.height) : sourceRect.width;
       const slot = document.createElement('div');
-      if (isMore) {
+      if (isGrok) {
+        slot.dataset.ptHeaderGrok = 'true';
+        slot.setAttribute('role', 'button');
+        slot.setAttribute('aria-label', 'Explain this post');
+        slot.setAttribute('tabindex', '-1');
+      } else if (isMore) {
         slot.dataset.ptHeaderMore = 'true';
         slot.setAttribute('role', 'button');
         slot.setAttribute('aria-label', 'More');
@@ -1699,12 +1836,13 @@ export default defineContentScript({
       setImportant(slot, 'left', `${sourceRect.left - controlsRect.left - (hitSize - sourceRect.width) / 2}px`);
       setImportant(slot, 'top', `${sourceRect.top - controlsRect.top - (hitSize - sourceRect.height) / 2}px`);
       setImportant(slot, 'width', `${hitSize}px`);
-      setImportant(slot, 'height', `${isMore ? hitSize : sourceRect.height}px`);
+      setImportant(slot, 'height', `${isInteractive ? hitSize : sourceRect.height}px`);
       setImportant(slot, 'color', ACTION_GRAY);
-      setImportant(slot, 'pointer-events', isMore ? 'auto' : 'none');
-      setImportant(slot, 'cursor', isMore ? 'pointer' : 'default');
+      setImportant(slot, 'pointer-events', isInteractive ? 'auto' : 'none');
+      setImportant(slot, 'cursor', isInteractive ? 'pointer' : 'default');
       setImportant(slot, 'overflow', 'visible');
-      if (isMore) {
+
+      if (isInteractive) {
         setImportant(slot, 'display', 'flex');
         setImportant(slot, 'align-items', 'center');
         setImportant(slot, 'justify-content', 'center');
@@ -1719,23 +1857,12 @@ export default defineContentScript({
         slot.appendChild(background);
       }
 
-      const clone = svg.cloneNode(true) as SVGSVGElement;
-      clone.removeAttribute('id');
-      clone.style.setProperty('display', 'block', 'important');
-      clone.style.setProperty('width', `${sourceRect.width}px`, 'important');
-      clone.style.setProperty('height', `${sourceRect.height}px`, 'important');
-      clone.style.setProperty('color', ACTION_GRAY, 'important');
-      clone.style.setProperty('position', 'relative', 'important');
-      clone.style.setProperty('z-index', '1', 'important');
-
-      for (const child of clone.querySelectorAll<SVGElement>('*')) {
-        child.style.setProperty('color', ACTION_GRAY, 'important');
-        if (child.getAttribute('fill') !== 'none') child.setAttribute('fill', 'currentColor');
-      }
-
+      const clone = control.svg
+        ? prepareHeaderSvg(control.svg, sourceRect.width, sourceRect.height)
+        : createGrokSvg(sourceRect.width, sourceRect.height);
       slot.appendChild(clone);
       overlay.appendChild(slot);
-    });
+    }
 
     setImportant(cloneTweet, 'position', 'relative');
     cloneTweet.appendChild(overlay);
