@@ -1877,6 +1877,49 @@ export default defineContentScript({
     cloneTweet.appendChild(overlay);
   }
 
+  function stripMediaContainers(root: HTMLElement): void {
+    const selectors = [
+      '[data-testid="tweetPhoto"]',
+      '[data-testid="videoPlayer"]',
+      '[data-testid="videoComponent"]',
+      '[data-testid="tweetGif"]',
+      '[data-testid="poll"]',
+      '[data-testid="quoteTweet"]',
+      '[data-testid^="card.wrapper"]',
+      '[data-testid^="card.layout"]',
+    ];
+    for (const node of root.querySelectorAll(selectors.join(','))) {
+      node.remove();
+    }
+
+    // Twitter often renders link cards / website previews / unannotated media
+    // wrappers without any data-testid. Catch them structurally: anything
+    // sitting between tweetText and the action row inside a fake reply is
+    // never something we need to render.
+    const text = root.querySelector(PT_SELECTORS.TWEET_TEXT);
+    const actions = root.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    if (!text || !actions) return;
+
+    let lca: Element | null = text.parentElement;
+    while (lca && !lca.contains(actions)) lca = lca.parentElement;
+    if (!lca) return;
+
+    let textChild: Element | null = null;
+    let actionsChild: Element | null = null;
+    for (const child of Array.from(lca.children)) {
+      if (child.contains(text)) textChild = child;
+      if (child.contains(actions)) actionsChild = child;
+    }
+    if (!textChild || !actionsChild || textChild === actionsChild) return;
+
+    let current = textChild.nextElementSibling;
+    while (current && current !== actionsChild) {
+      const next = current.nextElementSibling;
+      current.remove();
+      current = next;
+    }
+  }
+
   function neutralizeInteractiveElements(root: HTMLElement): void {
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
       anchor.href = '#';
@@ -2136,6 +2179,8 @@ export default defineContentScript({
     const tweet = clone.querySelector<HTMLElement>(PT_SELECTORS.TWEET_CELL);
     tweet?.removeAttribute(PT_SELECTORS.MARKER_ATTR);
     tweet?.setAttribute('data-pt-fake-reply', 'true');
+
+    stripMediaContainers(clone);
 
     setReplyAvatar(clone, reply.avatar);
 
