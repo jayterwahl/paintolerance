@@ -346,6 +346,23 @@ export default defineContentScript({
     return window.getComputedStyle(fontSource).fontFamily;
   }
 
+  function getPagePrimaryTextColor(): string {
+    const sources = [
+      document.querySelector<HTMLElement>('[data-testid="primaryColumn"] [data-testid="tweetText"]'),
+      document.querySelector<HTMLElement>('[data-testid="tweetText"]'),
+      document.querySelector<HTMLElement>('[data-testid="User-Name"] span'),
+      document.body,
+    ];
+    for (const source of sources) {
+      if (!source) continue;
+      const color = window.getComputedStyle(source).color;
+      if (color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent') {
+        return color;
+      }
+    }
+    return 'rgb(15, 20, 25)';
+  }
+
   function getVsOverlay(): HTMLDivElement {
     if (!vsOverlay || !document.contains(vsOverlay)) {
       vsOverlay = document.createElement('div');
@@ -1877,6 +1894,65 @@ export default defineContentScript({
     cloneTweet.appendChild(overlay);
   }
 
+  function stripMediaContainers(root: HTMLElement): void {
+    const selectors = [
+      '[data-testid="tweetPhoto"]',
+      '[data-testid="videoPlayer"]',
+      '[data-testid="videoComponent"]',
+      '[data-testid="tweetGif"]',
+      '[data-testid="poll"]',
+      '[data-testid="quoteTweet"]',
+      '[data-testid^="card.wrapper"]',
+      '[data-testid^="card.layout"]',
+    ];
+    for (const node of root.querySelectorAll(selectors.join(','))) {
+      node.remove();
+    }
+
+    // Twitter often renders link cards / website previews / unannotated media
+    // wrappers without any data-testid. Catch them structurally: anything
+    // sitting between tweetText and the action row inside a fake reply is
+    // never something we need to render.
+    const text = root.querySelector(PT_SELECTORS.TWEET_TEXT);
+    const actions = root.querySelector(PT_SELECTORS.TWEET_ACTIONS);
+    if (!text || !actions) return;
+
+    let lca: Element | null = text.parentElement;
+    while (lca && !lca.contains(actions)) lca = lca.parentElement;
+    if (!lca) return;
+
+    let textChild: Element | null = null;
+    let actionsChild: Element | null = null;
+    for (const child of Array.from(lca.children)) {
+      if (child.contains(text)) textChild = child;
+      if (child.contains(actions)) actionsChild = child;
+    }
+    if (!textChild || !actionsChild || textChild === actionsChild) return;
+
+    let current = textChild.nextElementSibling;
+    while (current && current !== actionsChild) {
+      const next = current.nextElementSibling;
+      current.remove();
+      current = next;
+    }
+  }
+
+  // The hardcoded fallback reply template bakes in Twitter's lights-out text
+  // color. In light or dim mode the cloned fake replies look ghosted, so
+  // rewrite any element with that exact inline color to use the page's actual
+  // primary text color. No-op when the page already uses the same color.
+  const TEMPLATE_PRIMARY_TEXT_COLOR = 'rgb(231, 233, 234)';
+
+  function applyPagePrimaryTextColor(root: HTMLElement): void {
+    const pageColor = getPagePrimaryTextColor();
+    if (!pageColor || pageColor === TEMPLATE_PRIMARY_TEXT_COLOR) return;
+    for (const el of root.querySelectorAll<HTMLElement>('[style*="color"]')) {
+      if (el.style.color === TEMPLATE_PRIMARY_TEXT_COLOR) {
+        el.style.color = pageColor;
+      }
+    }
+  }
+
   function neutralizeInteractiveElements(root: HTMLElement): void {
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
       anchor.href = '#';
@@ -2137,6 +2213,8 @@ export default defineContentScript({
     tweet?.removeAttribute(PT_SELECTORS.MARKER_ATTR);
     tweet?.setAttribute('data-pt-fake-reply', 'true');
 
+    stripMediaContainers(clone);
+
     setReplyAvatar(clone, reply.avatar);
 
     const author = clone.querySelector(PT_SELECTORS.TWEET_AUTHOR);
@@ -2175,6 +2253,7 @@ export default defineContentScript({
     ensureHeaderControls(clone, templateBoundary);
 
     neutralizeInteractiveElements(clone);
+    applyPagePrimaryTextColor(clone);
     installInjectedReplyHoverAffordances(clone);
     installInjectedReplyProfileHover(clone, reply);
 
