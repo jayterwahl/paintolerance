@@ -22,6 +22,24 @@ interface HoverActionStyle {
   backgroundColor: string;
 }
 
+interface ProfileCardTheme {
+  background: string;
+  primaryText: string;
+  secondaryText: string;
+  border: string;
+  subtleBorder: string;
+  followBackground: string;
+  followText: string;
+  followingBackground: string;
+  followingText: string;
+  followingHoverBackground: string;
+  unfollowText: string;
+  unfollowBorder: string;
+  pillBackground: string;
+  summaryHoverBackground: string;
+  shadow: string;
+}
+
 const ACTION_GRAY = 'rgb(113, 118, 123)';
 const ACTION_BLUE = 'rgb(29, 155, 240)';
 const ACTION_GREEN = 'rgb(0, 186, 124)';
@@ -30,6 +48,8 @@ const HEART_OUTLINE_SVG = '<g><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16
 const HEART_FILLED_SVG = '<g><path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g>';
 const BOOKMARK_OUTLINE_SVG = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g>';
 const BOOKMARK_FILLED_SVG = '<g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5z"></path></g>';
+const VERIFIED_BADGE_SVG = '<svg viewBox="0 0 22 22" aria-label="Verified account" role="img" style="display:block;width:20px;height:20px;color:rgb(29,155,240);fill:currentColor;flex-shrink:0;"><g><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path></g></svg>';
+const PROFILE_SUMMARY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" style="display:block;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;"><path d="M4 20L20 4"></path><path d="M6.5 15.5c-1.2-3 .1-6.5 3-8.1 2.7-1.5 6.1-.9 8.1 1.5"></path><path d="M17.5 8.5c1.2 3-.1 6.5-3 8.1-2.7 1.5-6.1.9-8.1-1.5"></path></svg>';
 
 // X/Twitter's native reply-action hover colours, captured from real reply UI.
 const HOVER_ACTION_STYLES: Record<HoverActionKind, HoverActionStyle> = {
@@ -110,6 +130,10 @@ export default defineContentScript({
   let hoverTooltipEl: HTMLDivElement | null = null;
   let hoverTooltipOwner: HTMLElement | null = null;
   let hoverTooltipTimer: number | null = null;
+  let profileHoverCardEl: HTMLDivElement | null = null;
+  let profileHoverOwner: HTMLElement | null = null;
+  let profileHoverTimer: number | null = null;
+  let profileHoverHideTimer: number | null = null;
 
   function isDebugEnabled(): boolean {
     return new URLSearchParams(location.search).has('ptdebug') ||
@@ -301,26 +325,25 @@ export default defineContentScript({
     }, 400);
   }
 
+  function getTwitterFontFamily(): string {
+    // Twitter sets TwitterChirp on inner tweet nodes, not always on body.
+    const fontSource =
+      document.querySelector('[data-testid="tweetText"]') ||
+      document.querySelector('[data-testid="User-Name"]') ||
+      document.querySelector('[data-testid="primaryColumn"]') ||
+      document.body;
+    return window.getComputedStyle(fontSource).fontFamily;
+  }
+
   function getVsOverlay(): HTMLDivElement {
     if (!vsOverlay || !document.contains(vsOverlay)) {
       vsOverlay = document.createElement('div');
       vsOverlay.id = 'pt-vs-overlay';
 
-      // Twitter sets TwitterChirp on an inner container, not body — inherit it
-      // explicitly so overlay text doesn't fall back to system fonts.
-      // Query an actual rendered tweet text node — that's where Twitter
-      // applies TwitterChirp, not on the column container.
-      const fontSource =
-        document.querySelector('[data-testid="tweetText"]') ||
-        document.querySelector('[data-testid="User-Name"]') ||
-        document.querySelector('[data-testid="primaryColumn"]') ||
-        document.body;
-      const fontFamily = window.getComputedStyle(fontSource).fontFamily;
-
       vsOverlay.style.cssText =
         'position:fixed;top:0;left:0;width:100%;height:100%;' +
         'pointer-events:none;z-index:99999;overflow:visible;' +
-        'font-family:' + fontFamily + ';';
+        'font-family:' + getTwitterFontFamily() + ';';
       document.body.appendChild(vsOverlay);
     }
     return vsOverlay;
@@ -560,6 +583,7 @@ export default defineContentScript({
     const avatarImg = document.createElement('img');
     avatarImg.src = resolveAvatarUrl(reply.avatar);
     avatarImg.alt = '';
+    avatarImg.setAttribute('data-testid', 'Tweet-User-Avatar');
     avatarImg.style.cssText =
       'width:32px;height:32px;border-radius:50%;flex-shrink:0;';
 
@@ -569,10 +593,12 @@ export default defineContentScript({
 
     // Name row
     const nameRow = document.createElement('div');
+    nameRow.setAttribute('data-testid', 'User-Name');
     nameRow.style.cssText =
       'display:flex;align-items:center;gap:4px;font-size:15px;line-height:20px;';
 
     const displayNameSpan = document.createElement('span');
+    displayNameSpan.setAttribute('role', 'link');
     // color:inherit picks up Twitter's own primary-text colour in both light and dark mode
     displayNameSpan.style.cssText = 'font-weight:700;color:inherit;';
     displayNameSpan.textContent = reply.displayName;
@@ -588,6 +614,7 @@ export default defineContentScript({
     }
 
     const handleSpan = document.createElement('span');
+    handleSpan.setAttribute('role', 'link');
     handleSpan.style.cssText = 'color:rgb(113,118,123);font-weight:400;';
     handleSpan.textContent = reply.handle;
 
@@ -644,6 +671,7 @@ export default defineContentScript({
     container.appendChild(avatarImg);
     container.appendChild(rightCol);
 
+    installInjectedReplyProfileHover(container, reply);
     return container;
   }
 
@@ -921,7 +949,7 @@ export default defineContentScript({
     const tooltip = document.createElement('div');
     tooltip.dataset.ptHoverTooltip = 'true';
     tooltip.textContent = label;
-    const fontFamily = window.getComputedStyle(document.body).fontFamily;
+    const fontFamily = getTwitterFontFamily();
     tooltip.style.cssText =
       'position:fixed;z-index:2147483647;pointer-events:none;' +
       'padding:2px 4px;border-radius:2px;background:rgb(83, 100, 113);' +
@@ -959,6 +987,430 @@ export default defineContentScript({
       if (!document.contains(owner)) return;
       showHoverTooltip(owner, label);
     }, 750);
+  }
+
+  function clearProfileHoverTimers(): void {
+    if (profileHoverTimer !== null) {
+      window.clearTimeout(profileHoverTimer);
+      profileHoverTimer = null;
+    }
+    if (profileHoverHideTimer !== null) {
+      window.clearTimeout(profileHoverHideTimer);
+      profileHoverHideTimer = null;
+    }
+  }
+
+  function removeProfileHoverCard(owner?: HTMLElement): void {
+    if (owner && profileHoverOwner && owner !== profileHoverOwner) return;
+    clearProfileHoverTimers();
+    profileHoverCardEl?.remove();
+    profileHoverCardEl = null;
+    profileHoverOwner = null;
+  }
+
+  function scheduleProfileHoverHide(owner: HTMLElement): void {
+    if (profileHoverHideTimer !== null) window.clearTimeout(profileHoverHideTimer);
+    profileHoverHideTimer = window.setTimeout(() => {
+      profileHoverHideTimer = null;
+      removeProfileHoverCard(owner);
+    }, 180);
+  }
+
+  function parseRgbColor(value: string): readonly [number, number, number] | null {
+    const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+  }
+
+  function isDarkTheme(): boolean {
+    const rgb = parseRgbColor(getPageBg());
+    if (!rgb) return true;
+    const [r, g, b] = rgb;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 128;
+  }
+
+  function getProfileCardTheme(): ProfileCardTheme {
+    if (isDarkTheme()) {
+      return {
+        background: 'rgb(0, 0, 0)',
+        primaryText: 'rgb(231, 233, 234)',
+        secondaryText: 'rgb(113, 118, 123)',
+        border: 'rgb(47, 51, 54)',
+        subtleBorder: 'rgb(83, 100, 113)',
+        followBackground: 'rgb(239, 243, 244)',
+        followText: 'rgb(15, 20, 25)',
+        followingBackground: 'rgba(0, 0, 0, 0)',
+        followingText: 'rgb(239, 243, 244)',
+        followingHoverBackground: 'rgba(244, 33, 46, 0.1)',
+        unfollowText: 'rgb(244, 33, 46)',
+        unfollowBorder: 'rgb(103, 7, 15)',
+        pillBackground: 'rgb(32, 35, 39)',
+        summaryHoverBackground: 'rgba(239, 243, 244, 0.1)',
+        shadow: 'rgba(255, 255, 255, 0.2) 0px 0px 28px, rgba(0, 0, 0, 0.4) 0px 8px 28px',
+      };
+    }
+
+    return {
+      background: 'rgb(255, 255, 255)',
+      primaryText: 'rgb(15, 20, 25)',
+      secondaryText: 'rgb(83, 100, 113)',
+      border: 'rgb(207, 217, 222)',
+      subtleBorder: 'rgb(207, 217, 222)',
+      followBackground: 'rgb(15, 20, 25)',
+      followText: 'rgb(255, 255, 255)',
+      followingBackground: 'rgba(255, 255, 255, 0)',
+      followingText: 'rgb(15, 20, 25)',
+      followingHoverBackground: 'rgba(244, 33, 46, 0.1)',
+      unfollowText: 'rgb(244, 33, 46)',
+      unfollowBorder: 'rgb(253, 201, 206)',
+      pillBackground: 'rgb(239, 243, 244)',
+      summaryHoverBackground: 'rgba(15, 20, 25, 0.1)',
+      shadow: 'rgba(101, 119, 134, 0.2) 0px 0px 24px, rgba(101, 119, 134, 0.15) 0px 8px 24px',
+    };
+  }
+
+  function formatProfileCount(count: number): string {
+    const rounded = Math.max(0, Math.floor(count));
+    if (rounded >= 1_000_000) return `${(rounded / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (rounded >= 10_000) return `${(rounded / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+    return rounded.toLocaleString('en-US');
+  }
+
+  function profileFollowingState(owner: HTMLElement, reply: GeneratedReply): boolean {
+    if (owner.dataset.ptProfileFollowing === 'true') return true;
+    if (owner.dataset.ptProfileFollowing === 'false') return false;
+    return reply.profile.following;
+  }
+
+  function setProfileFollowingState(owner: HTMLElement, following: boolean): void {
+    owner.dataset.ptProfileFollowing = following ? 'true' : 'false';
+  }
+
+  function applyProfileFollowButtonState(
+    button: HTMLButtonElement,
+    following: boolean,
+    isHovering: boolean,
+    theme: ProfileCardTheme,
+  ): void {
+    if (following && isHovering) {
+      button.textContent = 'Unfollow';
+      setImportant(button, 'background-color', theme.followingHoverBackground);
+      setImportant(button, 'border-color', theme.unfollowBorder);
+      setImportant(button, 'color', theme.unfollowText);
+      return;
+    }
+
+    if (following) {
+      button.textContent = 'Following';
+      setImportant(button, 'background-color', theme.followingBackground);
+      setImportant(button, 'border-color', theme.subtleBorder);
+      setImportant(button, 'color', theme.followingText);
+      return;
+    }
+
+    button.textContent = 'Follow';
+    setImportant(button, 'background-color', theme.followBackground);
+    setImportant(button, 'border-color', theme.followBackground);
+    setImportant(button, 'color', theme.followText);
+  }
+
+  function createProfileStat(count: number, label: string, theme: ProfileCardTheme): HTMLDivElement {
+    const stat = document.createElement('div');
+    stat.style.cssText = 'display:flex;align-items:baseline;gap:4px;min-width:0;';
+
+    const countEl = document.createElement('span');
+    countEl.textContent = formatProfileCount(count);
+    countEl.style.cssText = `font-size:17px;line-height:20px;font-weight:800;color:${theme.primaryText};`;
+
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    labelEl.style.cssText = `font-size:17px;line-height:20px;font-weight:400;color:${theme.secondaryText};`;
+
+    stat.append(countEl, labelEl);
+    return stat;
+  }
+
+  function createMutualAvatar(name: string, index: number, theme: ProfileCardTheme): HTMLDivElement {
+    const avatar = document.createElement('div');
+    const gradients = [
+      'linear-gradient(135deg, rgb(29, 155, 240), rgb(120, 86, 255))',
+      'linear-gradient(135deg, rgb(249, 24, 128), rgb(255, 122, 0))',
+      'linear-gradient(135deg, rgb(0, 186, 124), rgb(29, 155, 240))',
+    ];
+    avatar.textContent = (name.trim()[0] ?? '?').toUpperCase();
+    avatar.style.cssText =
+      'width:28px;height:28px;border-radius:9999px;display:flex;align-items:center;justify-content:center;' +
+      `font-size:12px;line-height:12px;font-weight:800;color:white;background:${gradients[index % gradients.length]};` +
+      `border:2px solid ${theme.background};box-sizing:border-box;` +
+      (index === 0 ? '' : 'margin-left:-9px;');
+    return avatar;
+  }
+
+  function mutualFollowerText(reply: GeneratedReply): string {
+    const names = reply.profile.mutualFollowers;
+    if (names.length === 0) return '';
+
+    const visibleNames = names.slice(0, 2).join(', ');
+    const extra = reply.profile.mutualFollowerExtraCount;
+    if (extra <= 0) return `Followed by ${visibleNames}`;
+    return `Followed by ${visibleNames}, and ${extra.toLocaleString('en-US')} others you follow`;
+  }
+
+  function positionProfileHoverCard(card: HTMLElement, anchor: HTMLElement): void {
+    const anchorRect = anchor.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const gap = 10;
+    const margin = 8;
+
+    let top = anchorRect.bottom + gap;
+    if (top + cardRect.height > window.innerHeight - margin && anchorRect.top - cardRect.height - gap >= margin) {
+      top = anchorRect.top - cardRect.height - gap;
+    }
+    top = Math.min(top, window.innerHeight - cardRect.height - margin);
+
+    let left = anchorRect.left;
+    if (anchorRect.width < 72) left = anchorRect.left - 12;
+    left = Math.min(left, window.innerWidth - cardRect.width - margin);
+    left = Math.max(margin, left);
+
+    setImportant(card, 'top', `${Math.round(Math.max(margin, top))}px`);
+    setImportant(card, 'left', `${Math.round(left)}px`);
+    setImportant(card, 'visibility', 'visible');
+  }
+
+  function buildProfileHoverCard(owner: HTMLElement, reply: GeneratedReply, theme: ProfileCardTheme): HTMLDivElement {
+    const card = document.createElement('div');
+    card.dataset.ptProfileHoverCard = 'true';
+    const fontFamily = getTwitterFontFamily();
+    card.style.cssText =
+      'position:fixed;z-index:2147483646;visibility:hidden;box-sizing:border-box;' +
+      'width:400px;max-width:calc(100vw - 16px);padding:20px 22px 20px 22px;' +
+      `border:1px solid ${theme.border};border-radius:16px;background:${theme.background};` +
+      `color:${theme.primaryText};box-shadow:${theme.shadow};font-family:${fontFamily};`;
+
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;gap:16px;';
+
+    const avatar = document.createElement('img');
+    avatar.src = resolveAvatarUrl(reply.avatar);
+    avatar.alt = '';
+    avatar.style.cssText = 'width:64px;height:64px;border-radius:9999px;object-fit:cover;flex-shrink:0;';
+
+    const followButton = document.createElement('button');
+    followButton.type = 'button';
+    followButton.style.cssText =
+      'height:48px;min-width:108px;padding:0 20px;border-radius:9999px;border:1px solid;' +
+      'font-size:20px;line-height:24px;font-weight:800;cursor:pointer;box-sizing:border-box;' +
+      'transition-property:background-color,border-color,color;transition-duration:0.2s;';
+    applyProfileFollowButtonState(followButton, profileFollowingState(owner, reply), false, theme);
+    followButton.addEventListener('mouseenter', () => {
+      applyProfileFollowButtonState(followButton, profileFollowingState(owner, reply), true, theme);
+    });
+    followButton.addEventListener('mouseleave', () => {
+      applyProfileFollowButtonState(followButton, profileFollowingState(owner, reply), false, theme);
+    });
+    followButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setProfileFollowingState(owner, !profileFollowingState(owner, reply));
+      applyProfileFollowButtonState(followButton, profileFollowingState(owner, reply), followButton.matches(':hover'), theme);
+    });
+
+    topRow.append(avatar, followButton);
+
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:14px;min-width:0;';
+
+    const displayName = document.createElement('div');
+    displayName.textContent = reply.displayName;
+    displayName.style.cssText =
+      `font-size:22px;line-height:26px;font-weight:800;color:${theme.primaryText};` +
+      'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+    nameRow.appendChild(displayName);
+
+    if (reply.verified) {
+      const badge = document.createElement('span');
+      badge.innerHTML = VERIFIED_BADGE_SVG;
+      badge.style.cssText = 'display:flex;align-items:center;flex-shrink:0;';
+      nameRow.appendChild(badge);
+    }
+
+    const handleRow = document.createElement('div');
+    handleRow.style.cssText = 'display:flex;align-items:center;gap:5px;margin-top:1px;min-width:0;';
+
+    const handle = document.createElement('span');
+    handle.textContent = reply.handle;
+    handle.style.cssText = `font-size:17px;line-height:22px;font-weight:400;color:${theme.secondaryText};`;
+    handleRow.appendChild(handle);
+
+    if (reply.profile.followsYou) {
+      const followsYou = document.createElement('span');
+      followsYou.textContent = 'Follows you';
+      followsYou.style.cssText =
+        `font-size:13px;line-height:16px;font-weight:500;color:${theme.secondaryText};` +
+        `background:${theme.pillBackground};border-radius:4px;padding:1px 4px;`;
+      handleRow.appendChild(followsYou);
+    }
+
+    const bio = document.createElement('div');
+    bio.textContent = reply.profile.bio;
+    bio.style.cssText =
+      `margin-top:18px;font-size:17px;line-height:24px;font-weight:400;color:${theme.primaryText};` +
+      'white-space:normal;overflow-wrap:break-word;';
+
+    const stats = document.createElement('div');
+    stats.style.cssText = 'display:flex;align-items:center;gap:28px;margin-top:18px;';
+    stats.append(
+      createProfileStat(reply.profile.followingCount, 'Following', theme),
+      createProfileStat(reply.profile.followersCount, 'Followers', theme),
+    );
+
+    card.append(topRow, nameRow, handleRow, bio, stats);
+
+    const mutualText = mutualFollowerText(reply);
+    if (mutualText) {
+      const mutualRow = document.createElement('div');
+      mutualRow.style.cssText = 'display:flex;align-items:center;gap:12px;margin-top:18px;min-width:0;';
+
+      const avatarStack = document.createElement('div');
+      avatarStack.style.cssText = 'display:flex;align-items:center;flex-shrink:0;min-width:48px;';
+      reply.profile.mutualFollowers.slice(0, 3).forEach((name, index) => {
+        avatarStack.appendChild(createMutualAvatar(name, index, theme));
+      });
+
+      const mutualLabel = document.createElement('div');
+      mutualLabel.textContent = mutualText;
+      mutualLabel.style.cssText =
+        `font-size:17px;line-height:22px;font-weight:400;color:${theme.secondaryText};` +
+        'min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
+
+      mutualRow.append(avatarStack, mutualLabel);
+      card.appendChild(mutualRow);
+    }
+
+    const summaryButton = document.createElement('button');
+    summaryButton.type = 'button';
+    summaryButton.innerHTML = `${PROFILE_SUMMARY_SVG}<span>Profile Summary</span>`;
+    summaryButton.style.cssText =
+      'width:100%;height:48px;margin-top:20px;border-radius:9999px;border:1px solid;' +
+      'display:flex;align-items:center;justify-content:center;gap:8px;background:transparent;' +
+      `border-color:${theme.subtleBorder};color:${theme.primaryText};` +
+      'font-size:20px;line-height:24px;font-weight:800;cursor:pointer;box-sizing:border-box;' +
+      'transition-property:background-color;transition-duration:0.2s;';
+    summaryButton.addEventListener('mouseenter', () => {
+      setImportant(summaryButton, 'background-color', theme.summaryHoverBackground);
+    });
+    summaryButton.addEventListener('mouseleave', () => {
+      setImportant(summaryButton, 'background-color', 'transparent');
+    });
+    summaryButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    card.appendChild(summaryButton);
+
+    card.addEventListener('mouseenter', () => {
+      if (profileHoverHideTimer !== null) {
+        window.clearTimeout(profileHoverHideTimer);
+        profileHoverHideTimer = null;
+      }
+    });
+    card.addEventListener('mouseleave', () => scheduleProfileHoverHide(owner));
+
+    return card;
+  }
+
+  function showProfileHoverCard(anchor: HTMLElement, owner: HTMLElement, reply: GeneratedReply): void {
+    clearProfileHoverTimers();
+    hideHoverTooltip();
+
+    if (profileHoverCardEl && profileHoverOwner === owner) {
+      positionProfileHoverCard(profileHoverCardEl, anchor);
+      return;
+    }
+
+    profileHoverCardEl?.remove();
+    profileHoverCardEl = null;
+
+    const theme = getProfileCardTheme();
+    const card = buildProfileHoverCard(owner, reply, theme);
+    document.body.appendChild(card);
+    positionProfileHoverCard(card, anchor);
+    profileHoverCardEl = card;
+    profileHoverOwner = owner;
+  }
+
+  function scheduleProfileHoverCard(anchor: HTMLElement, owner: HTMLElement, reply: GeneratedReply): void {
+    if (profileHoverHideTimer !== null) {
+      window.clearTimeout(profileHoverHideTimer);
+      profileHoverHideTimer = null;
+    }
+    if (profileHoverCardEl && profileHoverOwner === owner) {
+      positionProfileHoverCard(profileHoverCardEl, anchor);
+      return;
+    }
+    if (profileHoverCardEl && profileHoverOwner !== owner) {
+      removeProfileHoverCard();
+    }
+
+    if (profileHoverTimer !== null) window.clearTimeout(profileHoverTimer);
+    profileHoverTimer = window.setTimeout(() => {
+      profileHoverTimer = null;
+      if (!document.contains(anchor) || !document.contains(owner)) return;
+      showProfileHoverCard(anchor, owner, reply);
+    }, 500);
+  }
+
+  function setProfileTargetUnderline(target: HTMLElement, underlined: boolean): void {
+    const candidates = target.querySelectorAll<HTMLElement>('span, div[dir="ltr"]');
+    const elements = candidates.length > 0 ? Array.from(candidates) : [target];
+    for (const el of elements) {
+      el.style.setProperty('text-decoration-line', underlined ? 'underline' : 'none', 'important');
+    }
+  }
+
+  function installProfileHoverTarget(target: HTMLElement, owner: HTMLElement, reply: GeneratedReply): void {
+    if (target.dataset.ptProfileHoverTarget === 'true') return;
+    target.dataset.ptProfileHoverTarget = 'true';
+    setImportant(target, 'cursor', 'pointer');
+
+    target.addEventListener('mouseenter', () => {
+      if (!target.matches(PT_SELECTORS.TWEET_AVATAR)) setProfileTargetUnderline(target, true);
+      scheduleProfileHoverCard(target, owner, reply);
+    });
+    target.addEventListener('mouseleave', () => {
+      if (!target.matches(PT_SELECTORS.TWEET_AVATAR)) setProfileTargetUnderline(target, false);
+      scheduleProfileHoverHide(owner);
+    });
+    target.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  }
+
+  function installInjectedReplyProfileHover(root: HTMLElement, reply: GeneratedReply): void {
+    if (root.dataset.ptProfileHoverInstalled === 'true') return;
+    root.dataset.ptProfileHoverInstalled = 'true';
+
+    const targets = new Set<HTMLElement>();
+    const avatar = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_AVATAR);
+    if (avatar) targets.add(avatar);
+
+    const author = root.querySelector<HTMLElement>(PT_SELECTORS.TWEET_AUTHOR);
+    if (author) {
+      const userLinks = Array.from(author.querySelectorAll<HTMLElement>('a, [role="link"]'))
+        .filter(link => !link.querySelector('time'))
+        .slice(0, 2);
+      if (userLinks.length > 0) {
+        userLinks.forEach(link => targets.add(link));
+      } else {
+        targets.add(author);
+      }
+    }
+
+    for (const target of targets) {
+      installProfileHoverTarget(target, root, reply);
+    }
   }
 
   function installActionHover(
@@ -1464,6 +1916,7 @@ export default defineContentScript({
 
   function clearInjectedArtifacts({ clearMarkers = true }: { clearMarkers?: boolean } = {}): void {
     hideHoverTooltip();
+    removeProfileHoverCard();
     clearThreadInjections();
 
     for (const [, entry] of vsMap) entry.container.remove();
@@ -1585,6 +2038,7 @@ export default defineContentScript({
 
     neutralizeInteractiveElements(clone);
     installInjectedReplyHoverAffordances(clone);
+    installInjectedReplyProfileHover(clone, reply);
 
     return clone;
   }
@@ -2023,16 +2477,27 @@ export default defineContentScript({
 
   let observer: MutationObserver | null = null;
 
+  function handleViewportScroll(): void {
+    hideHoverTooltip();
+    removeProfileHoverCard();
+    scheduleVsUpdate();
+  }
+
   function startObserver(): void {
     if (observer) return;
 
-    // Keep VS overlay containers aligned with their tweet cells during scroll
-    ctx.addEventListener(window, 'scroll', scheduleVsUpdate, { passive: true, capture: true });
+    // Keep VS overlay containers aligned with their tweet cells during scroll.
+    // Native hover affordances disappear on scroll, so clear ours too.
+    ctx.addEventListener(window, 'scroll', handleViewportScroll, { passive: true, capture: true });
 
     // Process existing tweets on page
     processTweets();
 
     observer = new MutationObserver((mutations) => {
+      if (profileHoverOwner && !document.contains(profileHoverOwner)) {
+        removeProfileHoverCard();
+      }
+
       // Early exit: only care about mutations that add nodes
       let hasAddedNodes = false;
       for (const m of mutations) {
@@ -2057,7 +2522,7 @@ export default defineContentScript({
   }
 
   function stopObserver(): void {
-    window.removeEventListener('scroll', scheduleVsUpdate, { capture: true });
+    window.removeEventListener('scroll', handleViewportScroll, { capture: true });
     // Clean up fixed overlay and its entries
     if (vsOverlay) { vsOverlay.remove(); vsOverlay = null; }
     vsMap.clear();
