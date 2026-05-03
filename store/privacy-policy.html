@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pain Tolerance — Privacy Policy</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 680px; margin: 40px auto; padding: 0 24px;
+           line-height: 1.6; color: #222; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; }
+    p, li { font-size: 0.95rem; }
+    code { background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Pain Tolerance — Privacy Policy</h1>
+  <p><em>Last updated: May 2026</em></p>
+
+  <h2>What Pain Tolerance does</h2>
+  <p>
+    Pain Tolerance is a Chrome extension that injects simulated fake reply
+    previews beneath your own tweets on Twitter/X. It runs entirely in your
+    browser and makes no network requests of its own.
+  </p>
+
+  <h2>Data we collect</h2>
+  <p>
+    Pain Tolerance does <strong>not</strong> collect, transmit, or share any
+    personal data. The only information stored by the extension is:
+  </p>
+  <ul>
+    <li>Your Twitter/X handle (used locally to identify your tweets on screen)</li>
+    <li>Your active/inactive preference</li>
+    <li>Your intensity setting (Mild / Medium / Unhinged)</li>
+  </ul>
+  <p>
+    These three values are saved in <code>chrome.storage.sync</code>, which
+    means Chrome may sync them across your own devices if you are signed into
+    Chrome sync. This sync is managed entirely by Google/Chrome — Pain Tolerance
+    never touches your data outside your browser.
+  </p>
+
+  <h2>Network requests</h2>
+  <p>
+    Pain Tolerance makes <strong>zero</strong> outbound network requests. All
+    content (fake reply text, fake avatars, persona names) is generated locally
+    inside your browser using logic bundled with the extension.
+  </p>
+
+  <h2>Permissions</h2>
+  <p>
+    The extension requests the following permissions:
+  </p>
+  <ul>
+    <li>
+      <strong>storage</strong> — to save your handle and preferences across
+      browser sessions.
+    </li>
+    <li>
+      <strong>Read and change data on twitter.com and x.com</strong> — to detect
+      your tweets and inject simulated reply previews into the page. The
+      extension does not transmit any page data.
+    </li>
+  </ul>
+
+  <h2>Source code</h2>
+  <p>
+    Pain Tolerance is open source. You can review every line of the extension at
+    <a href="https://github.com/jayterwahl/paintolerance">github.com/jayterwahl/paintolerance</a>.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions? Open an issue on the project repository.
+  </p>
+</body>
+</html>
