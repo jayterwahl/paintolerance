@@ -1,0 +1,51 @@
+CHROME WEB STORE LISTING — Pain Tolerance
+==========================================
+
+TITLE: Pain Tolerance — Simulated Hostile Replies for Your Tweets
+
+SHORT DESCRIPTION (132 chars max):
+Simulated hostile replies on your own tweets to build up your pain tolerance for internet nonsense. No AI, no API keys.
+
+DETAILED DESCRIPTION:
+The internet is full of bots and bad-faith reply guys trying to get a rise out of you. Pain Tolerance helps you build immunity.
+
+This extension adds simulated hostile replies to your own tweets — mean, dismissive, off-topic, and completely fake. The replies come from generated personas and are produced entirely offline. No AI, no API keys, no data collection.
+
+HOW IT WORKS
+• Enter your Twitter/X handle in the extension popup
+• Toggle the extension on
+• Your tweets will appear to have attracted a wave of hostile, absurd, and completely fake replies
+• Adjust intensity from Mild (3–5 replies) to Medium (6–10) to Unhinged (11–20)
+
+7 REPLY ARCHETYPES
+• Ratio Guy — one-word dismissals ("ratio", "L", "cope")
+• Unhinged Reply Guy — disproportionate emotional reactions
+• Pseudo-Intellectual — sneering condescension disguised as insight
+• Sneering Dismissal — cool, contemptuous one-liners
+• Concern Troll — faux-sympathetic backhanded comments
+• Off-Topic Ranter — completely ignores your tweet, rants about something else
+• One-Word Oracle — single enigmatic words ("no", "wrong", "mid")
+
+THE TRAINING
+Over time, you'll notice the pattern: these replies contain no real argumentation, no substance, no signal. They are pure noise. Once you can spot it in simulation, you'll spot it in the wild.
+
+PRIVACY
+• No data collection — the only stored data is your handle and preferences
+• No network calls — all content generated offline
+• No remote code execution — everything runs locally in your browser
+• Open source
+
+CATEGORY: Productivity
+
+LANGUAGE: English
+
+WEBSITE: https://github.com/jayterwahl/paintolerance
+
+SINGLE PURPOSE DESCRIPTION:
+Injects simulated fake hostile reply indicators beneath the user's own tweets on Twitter/X for emotional resilience training.
+
+PERMISSIONS JUSTIFICATION:
+• storage: Required to save the user's Twitter handle, active/inactive state, and intensity preference across sessions.
+
+HOST PERMISSIONS JUSTIFICATION:
+• twitter.com, x.com: Required to detect the user's tweets on their timeline and inject simulated reply content into the page. The extension does not read tweet content, does not transmit any page data, and only modifies the visual appearance of the user's own feed.
